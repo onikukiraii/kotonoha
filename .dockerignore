@@ -1,0 +1,9 @@
+node_modules
+.git
+vault
+data
+target
+.svelte-kit
+.env
+*.md
+!packages/**/*.md

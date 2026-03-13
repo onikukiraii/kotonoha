@@ -1,0 +1,12 @@
+node_modules/
+dist/
+build/
+.env
+data/
+vault/
+.DS_Store
+*.db
+target/
+.svelte-kit/
+.vite/
+*.tsbuildinfo
