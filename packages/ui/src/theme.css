@@ -1,0 +1,65 @@
+/* Kotonoha Design Tokens */
+:root {
+  /* Colors - Warm Dark */
+  --koto-bg-base: #1e1d20;
+  --koto-bg-surface: #252428;
+  --koto-bg-elevated: #2c2a30;
+  --koto-bg-hover: #35323a;
+  --koto-bg-selected: #3a2f1e;
+  --koto-bg-input: #1a191c;
+
+  --koto-accent: #d4a574;
+  --koto-accent-dim: #a07850;
+  --koto-accent-subtle: rgba(212, 165, 116, 0.12);
+
+  --koto-text-primary: #e0ddd5;
+  --koto-text-secondary: #9a9590;
+  --koto-text-muted: #6b665f;
+  --koto-text-link: #d4a574;
+
+  --koto-border: #3a3730;
+  --koto-border-subtle: #2e2b28;
+
+  --koto-tag-bg: #2a3a2a;
+  --koto-tag-text: #98c379;
+  --koto-mark-bg: #e5c07b;
+  --koto-mark-text: #1e1d20;
+  --koto-dirty: #e5c07b;
+  --koto-success: #98c379;
+
+  /* Typography */
+  --koto-font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --koto-font-mono: ui-monospace, 'SF Mono', 'Cascadia Code', monospace;
+  --koto-font-size-xs: 11px;
+  --koto-font-size-sm: 13px;
+  --koto-font-size-base: 15px;
+  --koto-font-size-lg: 16px;
+
+  /* Spacing (4px grid) */
+  --koto-space-1: 4px;
+  --koto-space-2: 8px;
+  --koto-space-3: 12px;
+  --koto-space-4: 16px;
+  --koto-space-5: 20px;
+  --koto-space-6: 24px;
+  --koto-space-8: 32px;
+
+  /* Touch targets */
+  --koto-touch-min: 44px;
+
+  /* Radii */
+  --koto-radius-sm: 4px;
+  --koto-radius-md: 8px;
+  --koto-radius-lg: 12px;
+
+  /* Transitions */
+  --koto-transition-fast: 150ms ease;
+  --koto-transition-normal: 250ms ease;
+  --koto-transition-slow: 400ms cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Safe area */
+  --koto-safe-top: env(safe-area-inset-top);
+  --koto-safe-bottom: env(safe-area-inset-bottom);
+  --koto-safe-left: env(safe-area-inset-left);
+  --koto-safe-right: env(safe-area-inset-right);
+}

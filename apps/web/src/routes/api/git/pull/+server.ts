@@ -11,6 +11,8 @@ export const POST: RequestHandler = async () => {
     }
     return json(result)
   } catch (err) {
-    return json({ error: 'Failed to pull' }, { status: 500 })
+    const message = err instanceof Error ? err.message : String(err)
+    console.error('[api/git/pull] error:', message)
+    return json({ error: message }, { status: 500 })
   }
 }

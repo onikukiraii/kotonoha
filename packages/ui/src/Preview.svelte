@@ -98,27 +98,30 @@
 
 <style>
   .preview-container {
-    padding: 1rem;
-    color: #e0e0e0;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    font-size: 15px;
-    line-height: 1.7;
+    padding: var(--koto-space-4);
+    padding-left: calc(var(--koto-space-5) + var(--koto-safe-left));
+    padding-right: calc(var(--koto-space-5) + var(--koto-safe-right));
+    padding-bottom: calc(var(--koto-space-8) + var(--koto-safe-bottom));
+    color: var(--koto-text-primary);
+    font-family: var(--koto-font-body);
+    font-size: 16px;
+    line-height: 1.8;
     overflow-y: auto;
     height: 100%;
   }
 
   .preview-container :global(h1) {
-    font-size: 1.8em;
-    border-bottom: 1px solid #333;
+    font-size: 1.5em;
+    border-bottom: 1px solid var(--koto-border);
     padding-bottom: 0.3em;
-    margin-top: 1.5em;
+    margin-top: 1.2em;
   }
 
   .preview-container :global(h2) {
-    font-size: 1.4em;
-    border-bottom: 1px solid #2a2a2a;
+    font-size: 1.25em;
+    border-bottom: 1px solid var(--koto-border-subtle);
     padding-bottom: 0.2em;
-    margin-top: 1.3em;
+    margin-top: 1.1em;
   }
 
   .preview-container :global(h3) {
@@ -127,7 +130,7 @@
   }
 
   .preview-container :global(a) {
-    color: #61afef;
+    color: var(--koto-accent);
     text-decoration: none;
   }
 
@@ -136,33 +139,36 @@
   }
 
   .preview-container :global(.wikilink) {
-    color: #61afef;
+    color: var(--koto-accent);
     cursor: pointer;
     text-decoration: underline;
     text-decoration-style: dotted;
   }
 
   .preview-container :global(.tag) {
-    color: #98c379;
-    background: #2a3a2a;
+    color: var(--koto-tag-text);
+    background: var(--koto-tag-bg);
     padding: 0.1em 0.4em;
     border-radius: 3px;
     font-size: 0.9em;
   }
 
   .preview-container :global(code) {
-    background: #2d2d2d;
+    background: var(--koto-bg-elevated);
     padding: 0.2em 0.4em;
     border-radius: 3px;
     font-size: 0.9em;
-    font-family: 'JetBrains Mono', monospace;
+    font-family: var(--koto-font-mono);
   }
 
   .preview-container :global(pre) {
-    background: #2d2d2d;
-    padding: 1em;
-    border-radius: 6px;
+    background: var(--koto-bg-elevated);
+    padding: 0.75em;
+    font-size: 13px;
+    border-radius: var(--koto-radius-md);
     overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    max-width: calc(100vw - var(--koto-space-5) * 2);
   }
 
   .preview-container :global(pre code) {
@@ -171,37 +177,43 @@
   }
 
   .preview-container :global(blockquote) {
-    border-left: 3px solid #61afef;
+    border-left: 3px solid var(--koto-accent);
     margin-left: 0;
+    margin-right: 0;
     padding-left: 1em;
-    color: #abb2bf;
+    color: var(--koto-text-secondary);
   }
 
   .preview-container :global(table) {
     border-collapse: collapse;
     width: 100%;
     margin: 1em 0;
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
   }
 
   .preview-container :global(th),
   .preview-container :global(td) {
-    border: 1px solid #3e4451;
+    border: 1px solid var(--koto-border);
     padding: 0.5em 0.8em;
     text-align: left;
   }
 
   .preview-container :global(th) {
-    background: #2c313a;
+    background: var(--koto-bg-elevated);
   }
 
   .preview-container :global(img) {
     max-width: 100%;
-    border-radius: 4px;
+    height: auto;
+    border-radius: var(--koto-radius-md);
+    margin: 0.8em 0;
   }
 
   .preview-container :global(mark) {
-    background: #e5c07b;
-    color: #1a1a1a;
+    background: var(--koto-mark-bg);
+    color: var(--koto-mark-text);
     padding: 0.1em 0.2em;
     border-radius: 2px;
   }
@@ -221,7 +233,7 @@
 
   .preview-container :global(hr) {
     border: none;
-    border-top: 1px solid #3e4451;
+    border-top: 1px solid var(--koto-border);
     margin: 1.5em 0;
   }
 

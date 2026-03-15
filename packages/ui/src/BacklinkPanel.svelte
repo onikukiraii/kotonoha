@@ -37,56 +37,61 @@
   .backlink-panel {
     height: 100%;
     overflow-y: auto;
-    background: #1e1e1e;
-    color: #cccccc;
-    font-size: 13px;
+    background: var(--koto-bg-base);
+    color: var(--koto-text-secondary);
+    font-size: var(--koto-font-size-sm);
   }
 
   .panel-header {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 8px 12px;
-    border-bottom: 1px solid #3e4451;
+    gap: var(--koto-space-2);
+    padding: var(--koto-space-2) var(--koto-space-3);
+    border-bottom: 1px solid var(--koto-border);
     position: sticky;
     top: 0;
-    background: #1e1e1e;
+    background: var(--koto-bg-base);
   }
 
   .panel-title {
     font-weight: 600;
-    font-size: 12px;
+    font-size: var(--koto-font-size-xs);
     text-transform: uppercase;
-    color: #888;
+    color: var(--koto-text-muted);
   }
 
   .panel-count {
-    background: #3e4451;
-    color: #ccc;
+    background: var(--koto-bg-hover);
+    color: var(--koto-text-secondary);
     padding: 1px 6px;
-    border-radius: 8px;
-    font-size: 11px;
+    border-radius: var(--koto-radius-md);
+    font-size: var(--koto-font-size-xs);
   }
 
   .backlink-item {
-    padding: 8px 12px;
+    min-height: var(--koto-touch-min);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: var(--koto-space-3);
     cursor: pointer;
-    border-bottom: 1px solid #2a2a2a;
+    border-bottom: 1px solid var(--koto-border-subtle);
+    transition: background var(--koto-transition-fast);
   }
 
   .backlink-item:hover {
-    background: #2a2d2e;
+    background: var(--koto-bg-hover);
   }
 
   .backlink-source {
-    color: #61afef;
+    color: var(--koto-accent);
     font-weight: 500;
     margin-bottom: 2px;
   }
 
   .backlink-snippet {
-    color: #888;
-    font-size: 12px;
+    color: var(--koto-text-muted);
+    font-size: var(--koto-font-size-xs);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -95,6 +100,6 @@
   .empty {
     padding: 1rem;
     text-align: center;
-    color: #666;
+    color: var(--koto-text-muted);
   }
 </style>

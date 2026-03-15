@@ -13,6 +13,8 @@ export const POST: RequestHandler = async ({ request }) => {
 
     return json({ ok: true, commit_hash })
   } catch (err) {
-    return json({ error: 'Failed to commit and push' }, { status: 500 })
+    const message = err instanceof Error ? err.message : String(err)
+    console.error('[api/git/commit-push] error:', message)
+    return json({ error: message }, { status: 500 })
   }
 }

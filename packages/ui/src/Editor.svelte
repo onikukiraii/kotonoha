@@ -63,14 +63,14 @@
 
     const darkTheme = EditorView.theme(
       {
-        '&': { backgroundColor: '#1a1a1a', color: '#e0e0e0', height: '100%' },
-        '.cm-content': { caretColor: '#528bff', fontFamily: "'JetBrains Mono', monospace", fontSize: '14px' },
-        '.cm-cursor': { borderLeftColor: '#528bff' },
-        '.cm-activeLine': { backgroundColor: '#2c313a' },
-        '.cm-selectionBackground': { backgroundColor: '#3e4451' },
-        '&.cm-focused .cm-selectionBackground': { backgroundColor: '#3e4451' },
-        '.cm-gutters': { backgroundColor: '#1a1a1a', color: '#636d83', border: 'none' },
-        '.cm-wikilink': { color: '#61afef', textDecoration: 'underline', cursor: 'pointer' },
+        '&': { backgroundColor: '#1e1d20', color: '#e0ddd5', height: '100%' },
+        '.cm-content': { caretColor: '#d4a574', fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", fontSize: '15px' },
+        '.cm-cursor': { borderLeftColor: '#d4a574' },
+        '.cm-activeLine': { backgroundColor: '#2c2a30' },
+        '.cm-selectionBackground': { backgroundColor: '#3a2f1e' },
+        '&.cm-focused .cm-selectionBackground': { backgroundColor: '#3a2f1e' },
+        '.cm-gutters': { backgroundColor: '#1e1d20', color: '#6b665f', border: 'none' },
+        '.cm-wikilink': { color: '#d4a574', textDecoration: 'underline', cursor: 'pointer' },
         '.cm-line': { padding: '0 4px' },
       },
       { dark: true },

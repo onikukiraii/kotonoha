@@ -1,7 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import { gitState, loadGitStatus, pullFromRemote, commitAndPush, gitLoading } from '$lib/stores/git.js'
-  import { logout } from '$lib/api.js'
 
   let commitMessage = $state('')
   let statusMessage = $state('')
@@ -87,10 +86,6 @@
     {/if}
   </section>
 
-  <section class="settings-section">
-    <h3>アカウント</h3>
-    <button class="logout-btn" onclick={logout}>ログアウト</button>
-  </section>
 </div>
 
 <style>
@@ -98,23 +93,27 @@
     max-width: 600px;
     margin: 0 auto;
     padding: 1.5rem;
+    padding-left: calc(1.5rem + var(--koto-safe-left));
+    padding-right: calc(1.5rem + var(--koto-safe-right));
+    padding-bottom: calc(1.5rem + var(--koto-safe-bottom) + 48px);
   }
 
   h2 {
     font-size: 1.5rem;
     margin-bottom: 1.5rem;
+    color: var(--koto-text-primary);
   }
 
   h3 {
     font-size: 1.1rem;
     margin-bottom: 1rem;
-    color: #ccc;
+    color: var(--koto-text-secondary);
   }
 
   .settings-section {
-    background: #252526;
-    border: 1px solid #3e4451;
-    border-radius: 8px;
+    background: var(--koto-bg-surface);
+    border: 1px solid var(--koto-border);
+    border-radius: var(--koto-radius-md);
     padding: 1rem;
     margin-bottom: 1rem;
   }
@@ -125,55 +124,65 @@
 
   .status-row {
     display: flex;
-    gap: 8px;
-    padding: 4px 0;
-    font-size: 13px;
+    gap: var(--koto-space-2);
+    padding: var(--koto-space-1) 0;
+    font-size: var(--koto-font-size-sm);
   }
 
   .label {
-    color: #888;
+    color: var(--koto-text-muted);
     min-width: 80px;
   }
 
   .value {
-    color: #e0e0e0;
-    font-family: 'JetBrains Mono', monospace;
+    color: var(--koto-text-primary);
+    font-family: var(--koto-font-mono);
   }
 
   .actions {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: var(--koto-space-2);
   }
 
   .commit-form {
     display: flex;
-    gap: 8px;
+    flex-direction: column;
+    gap: var(--koto-space-2);
   }
 
   .commit-form input {
     flex: 1;
-    padding: 8px 12px;
-    background: #1a1a1a;
-    border: 1px solid #3e4451;
-    border-radius: 4px;
-    color: #e0e0e0;
-    font-size: 13px;
+    padding: var(--koto-space-2) var(--koto-space-3);
+    min-height: var(--koto-touch-min);
+    background: var(--koto-bg-input);
+    border: 1px solid var(--koto-border);
+    border-radius: var(--koto-radius-sm);
+    color: var(--koto-text-primary);
+    font-size: var(--koto-font-size-base);
     outline: none;
+    font-family: var(--koto-font-body);
+  }
+
+  .commit-form input:focus {
+    border-color: var(--koto-accent-dim);
   }
 
   button {
-    padding: 8px 16px;
-    background: #3e4451;
+    padding: var(--koto-space-2) var(--koto-space-4);
+    min-height: var(--koto-touch-min);
+    background: var(--koto-bg-hover);
     border: none;
-    border-radius: 4px;
-    color: #e0e0e0;
+    border-radius: var(--koto-radius-sm);
+    color: var(--koto-text-primary);
     cursor: pointer;
-    font-size: 13px;
+    font-size: var(--koto-font-size-base);
+    font-family: var(--koto-font-body);
+    transition: background var(--koto-transition-fast);
   }
 
   button:hover:not(:disabled) {
-    background: #4e5561;
+    background: var(--koto-accent-dim);
   }
 
   button:disabled {
@@ -181,18 +190,9 @@
     cursor: not-allowed;
   }
 
-  .logout-btn {
-    background: #e06c75;
-    color: white;
-  }
-
-  .logout-btn:hover {
-    background: #c75a63;
-  }
-
   .status-message {
-    margin-top: 8px;
-    font-size: 13px;
-    color: #98c379;
+    margin-top: var(--koto-space-2);
+    font-size: var(--koto-font-size-sm);
+    color: var(--koto-success);
   }
 </style>

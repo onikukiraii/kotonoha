@@ -38,17 +38,25 @@ export async function initOrCloneVault(): Promise<void> {
           await git.remote(['set-url', 'origin', authUrl])
         }
         await getGit().pull('origin', 'main')
-      } catch {
-        // Pull failure is non-fatal on startup
+        console.log('[git] startup pull completed')
+      } catch (err) {
+        console.error('[git] startup pull failed:', (err as Error).message)
       }
       return
     }
 
     if (env.GITHUB_REPO_URL && env.GITHUB_PAT) {
       const authUrl = getAuthUrl()
-      await simpleGit().clone(authUrl, env.VAULT_PATH)
+      console.log(`[git] cloning from ${env.GITHUB_REPO_URL} to ${env.VAULT_PATH}`)
+      try {
+        await simpleGit().clone(authUrl, env.VAULT_PATH)
+        console.log('[git] clone completed')
+      } catch (err) {
+        console.error('[git] clone failed:', (err as Error).message)
+        throw err
+      }
     } else {
-      // Initialize empty repo if no remote configured
+      console.log('[git] no remote configured, initializing empty repo')
       if (!existsSync(gitDir)) {
         await getGit().init()
       }

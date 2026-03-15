@@ -1,10 +1,33 @@
 import Database from 'better-sqlite3'
-import { readFileSync, mkdirSync } from 'fs'
-import { fileURLToPath } from 'url'
+import { mkdirSync } from 'fs'
 import path from 'path'
 import type { SearchResult, BacklinkResult } from '@kotonoha/types'
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const SCHEMA = `
+CREATE TABLE IF NOT EXISTS files (
+  path TEXT PRIMARY KEY,
+  filename TEXT NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS links (
+  source_path TEXT NOT NULL,
+  target TEXT NOT NULL,
+  PRIMARY KEY (source_path, target)
+);
+
+CREATE TABLE IF NOT EXISTS tags (
+  path TEXT NOT NULL,
+  tag TEXT NOT NULL,
+  PRIMARY KEY (path, tag)
+);
+
+CREATE VIRTUAL TABLE IF NOT EXISTS fts USING fts5(
+  path UNINDEXED,
+  content,
+  tokenize = 'trigram'
+);
+`
 
 let db: Database.Database | null = null
 
@@ -21,8 +44,7 @@ export function getDb(): Database.Database {
 
 export function initDb(): void {
   const database = getDb()
-  const schema = readFileSync(path.join(__dirname, 'schema.sql'), 'utf-8')
-  database.exec(schema)
+  database.exec(SCHEMA)
 }
 
 export function upsertFile(filePath: string, filename: string, updatedAt: number): void {

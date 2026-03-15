@@ -5,6 +5,7 @@
     results?: SearchResult[]
     modes?: ('filename' | 'fulltext')[]
     placeholder?: string
+    fullscreen?: boolean
     onSearch?: (query: string, mode: 'filename' | 'fulltext') => void
     onSelect?: (result: SearchResult) => void
     onClose?: () => void
@@ -14,6 +15,7 @@
     results = [],
     modes = ['filename'],
     placeholder = 'ファイルを検索...',
+    fullscreen = true,
     onSearch = () => {},
     onSelect = () => {},
     onClose = () => {},
@@ -42,14 +44,20 @@
   function handleKeydown(event: KeyboardEvent) {
     switch (event.key) {
       case 'ArrowDown':
+        event.preventDefault()
+        selectedIndex = Math.min(selectedIndex + 1, results.length - 1)
+        break
       case 'j':
-        if (event.key === 'j' && !event.ctrlKey) break
+        if (fullscreen || !event.ctrlKey) break
         event.preventDefault()
         selectedIndex = Math.min(selectedIndex + 1, results.length - 1)
         break
       case 'ArrowUp':
+        event.preventDefault()
+        selectedIndex = Math.max(selectedIndex - 1, 0)
+        break
       case 'k':
-        if (event.key === 'k' && !event.ctrlKey) break
+        if (fullscreen || !event.ctrlKey) break
         event.preventDefault()
         selectedIndex = Math.max(selectedIndex - 1, 0)
         break
@@ -87,9 +95,17 @@
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="fuzzy-overlay" onkeydown={handleKeydown} onclick={onClose}>
+<div class="fuzzy-overlay" class:fullscreen onkeydown={handleKeydown} onclick={onClose}>
   <!-- svelte-ignore a11y_click_events_have_key_events -->
   <div class="fuzzy-modal" onclick={(e) => e.stopPropagation()}>
+    {#if fullscreen}
+      <button class="close-btn" onclick={onClose}>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M18 6L6 18M6 6l12 12"/>
+        </svg>
+      </button>
+    {/if}
+
     {#if modes.length > 1}
       <div class="mode-tabs">
         {#each modes as mode}
@@ -149,45 +165,86 @@
     z-index: 100;
   }
 
+  .fuzzy-overlay.fullscreen {
+    padding-top: 0;
+    background: var(--koto-bg-base);
+  }
+
   .fuzzy-modal {
-    background: #252526;
-    border: 1px solid #3e4451;
-    border-radius: 8px;
+    background: var(--koto-bg-surface);
+    border: 1px solid var(--koto-border);
+    border-radius: var(--koto-radius-md);
     width: min(600px, 90vw);
     max-height: 60vh;
     display: flex;
     flex-direction: column;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
     align-self: flex-start;
+    position: relative;
+  }
+
+  .fullscreen .fuzzy-modal {
+    width: 100%;
+    max-height: 100%;
+    height: 100%;
+    border: none;
+    border-radius: 0;
+    padding-top: var(--koto-safe-top);
+    padding-bottom: var(--koto-safe-bottom);
+  }
+
+  .close-btn {
+    position: absolute;
+    top: var(--koto-space-2);
+    right: var(--koto-space-2);
+    min-width: var(--koto-touch-min);
+    min-height: var(--koto-touch-min);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    color: var(--koto-text-muted);
+    cursor: pointer;
+    border-radius: var(--koto-radius-sm);
+    z-index: 1;
+  }
+
+  .close-btn:hover {
+    background: var(--koto-bg-hover);
+    color: var(--koto-text-primary);
   }
 
   .mode-tabs {
     display: flex;
-    border-bottom: 1px solid #3e4451;
+    border-bottom: 1px solid var(--koto-border);
   }
 
   .mode-tab {
     flex: 1;
-    padding: 8px;
+    min-height: var(--koto-touch-min);
+    padding: var(--koto-space-2);
     background: none;
     border: none;
-    color: #888;
+    color: var(--koto-text-muted);
     cursor: pointer;
-    font-size: 12px;
+    font-size: var(--koto-font-size-sm);
+    transition: color var(--koto-transition-fast);
   }
 
   .mode-tab.active {
-    color: #e0e0e0;
-    border-bottom: 2px solid #61afef;
+    color: var(--koto-text-primary);
+    border-bottom: 2px solid var(--koto-accent);
   }
 
   .search-input {
-    background: #1a1a1a;
+    background: var(--koto-bg-input);
     border: none;
-    border-bottom: 1px solid #3e4451;
-    padding: 12px 16px;
-    color: #e0e0e0;
-    font-size: 16px;
+    border-bottom: 1px solid var(--koto-border);
+    padding: var(--koto-space-3) var(--koto-space-4);
+    min-height: var(--koto-touch-min);
+    color: var(--koto-text-primary);
+    font-size: var(--koto-font-size-lg);
     outline: none;
     font-family: inherit;
   }
@@ -198,32 +255,37 @@
   }
 
   .result-item {
-    padding: 8px 16px;
+    min-height: var(--koto-touch-min);
+    padding: var(--koto-space-3) var(--koto-space-4);
     cursor: pointer;
-    border-bottom: 1px solid #2a2a2a;
+    border-bottom: 1px solid var(--koto-border-subtle);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    transition: background var(--koto-transition-fast);
   }
 
   .result-item:hover,
   .result-item.selected {
-    background: #094771;
+    background: var(--koto-bg-selected);
   }
 
   .result-filename {
-    color: #e0e0e0;
+    color: var(--koto-text-primary);
     font-weight: 500;
     font-size: 14px;
   }
 
   .result-path {
-    color: #666;
-    font-size: 12px;
+    color: var(--koto-text-muted);
+    font-size: var(--koto-font-size-xs);
     margin-top: 2px;
   }
 
   .result-snippet {
-    color: #999;
-    font-size: 12px;
-    margin-top: 4px;
+    color: var(--koto-text-secondary);
+    font-size: var(--koto-font-size-xs);
+    margin-top: var(--koto-space-1);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -232,6 +294,6 @@
   .no-results {
     padding: 2rem;
     text-align: center;
-    color: #666;
+    color: var(--koto-text-muted);
   }
 </style>

@@ -5,6 +5,7 @@
     nodes?: FileNode[]
     selectedPath?: string | null
     keyboardMode?: boolean
+    disableVimKeys?: boolean
     depth?: number
     onSelect?: (node: FileNode) => void
     onCreateFile?: () => void
@@ -16,6 +17,7 @@
     nodes = [],
     selectedPath = null,
     keyboardMode = false,
+    disableVimKeys = false,
     depth = 0,
     onSelect = () => {},
     onCreateFile = () => {},
@@ -63,6 +65,9 @@
 
     const flat = flatNodes
     if (flat.length === 0) return
+
+    const isVimKey = (key: string) => ['j', 'k', 'h', 'l', 'o', 'd', 'r'].includes(key)
+    if (disableVimKeys && isVimKey(event.key)) return
 
     switch (event.key) {
       case 'j':
@@ -145,14 +150,18 @@
       class:selected={node.path === selectedPath}
       class:focused={keyboardMode && i === focusedIndex}
       class:directory={node.is_dir}
-      style="padding-left: {getDepth(node.path) * 16 + 8}px"
+      style="padding-left: {getDepth(node.path) * 16 + 12}px"
       onclick={() => handleClick(node)}
     >
       <span class="icon">
         {#if node.is_dir}
-          {expandedDirs.has(node.path) ? '📂' : '📁'}
+          <svg class="chevron" class:expanded={expandedDirs.has(node.path)} width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
+            <path d="M4.5 2L8.5 6L4.5 10" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
         {:else}
-          📄
+          <svg width="12" height="12" viewBox="0 0 12 12">
+            <circle cx="6" cy="6" r="2.5" fill="var(--koto-text-muted)"/>
+          </svg>
         {/if}
       </span>
       <span class="name">{node.name}</span>
@@ -168,10 +177,10 @@
   .filetree {
     height: 100%;
     overflow-y: auto;
-    background: #1e1e1e;
-    color: #cccccc;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    font-size: 13px;
+    background: var(--koto-bg-base);
+    color: var(--koto-text-secondary);
+    font-family: var(--koto-font-body);
+    font-size: var(--koto-font-size-sm);
     outline: none;
     user-select: none;
   }
@@ -179,25 +188,27 @@
   .tree-item {
     display: flex;
     align-items: center;
-    gap: 6px;
-    padding: 4px 8px;
+    gap: var(--koto-space-2);
+    min-height: var(--koto-touch-min);
+    padding: var(--koto-space-3) var(--koto-space-2);
     cursor: pointer;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    transition: background var(--koto-transition-fast);
   }
 
   .tree-item:hover {
-    background: #2a2d2e;
+    background: var(--koto-bg-hover);
   }
 
   .tree-item.selected {
-    background: #094771;
-    color: #ffffff;
+    background: var(--koto-bg-selected);
+    color: var(--koto-accent);
   }
 
   .tree-item.focused {
-    outline: 1px solid #007fd4;
+    outline: 1px solid var(--koto-accent-dim);
     outline-offset: -1px;
   }
 
@@ -206,8 +217,21 @@
   }
 
   .icon {
-    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
     flex-shrink: 0;
+    color: var(--koto-text-muted);
+  }
+
+  .chevron {
+    transition: transform var(--koto-transition-fast);
+  }
+
+  .chevron.expanded {
+    transform: rotate(90deg);
   }
 
   .name {
@@ -217,7 +241,7 @@
 
   .empty {
     padding: 1rem;
-    color: #666;
+    color: var(--koto-text-muted);
     text-align: center;
   }
 </style>
