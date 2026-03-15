@@ -120,3 +120,13 @@ export async function renameCurrentFile(
   }
   await loadFiles();
 }
+
+export async function openDailyNote(): Promise<void> {
+  if (!vaultMeta) return;
+  const { path, created } = await invoke<{ path: string; created: boolean }>(
+    "ensure_daily_note",
+    { vaultPath: vaultMeta.path },
+  );
+  if (created) await loadFiles();
+  await openFile(path);
+}

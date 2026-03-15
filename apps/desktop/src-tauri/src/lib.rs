@@ -20,6 +20,7 @@ pub fn run() {
             fs::create_file,
             fs::delete_file,
             fs::rename_file,
+            fs::ensure_daily_note,
             // parse
             parse::render_markdown,
             // index

@@ -87,6 +87,11 @@ export async function searchByTagApi(tag: string): Promise<SearchResult[]> {
   return results
 }
 
+// Daily
+export async function openDailyNote(): Promise<{ path: string; created: boolean }> {
+  return fetchApi('/api/files/daily', { method: 'POST' })
+}
+
 // Git
 export async function getGitStatus(): Promise<GitStatus> {
   return fetchApi('/api/git/status')

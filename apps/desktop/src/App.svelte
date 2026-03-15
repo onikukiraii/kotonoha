@@ -12,6 +12,7 @@
     initVault,
     openVault,
     openFile,
+    openDailyNote,
   } from "./lib/stores/vault.svelte";
   import {
     getEditorState,
@@ -95,6 +96,9 @@
     } else if (meta && !e.shiftKey && e.key === "g") {
       e.preventDefault();
       toggleGitPanel();
+    } else if (meta && e.key === "d") {
+      e.preventDefault();
+      openDailyNote();
     }
   }
 </script>
@@ -142,7 +146,7 @@
         <div class="empty-state">
           <p>ファイルを選択してください</p>
           <p class="hint">
-            <kbd>⌘O</kbd> ファイル検索
+            <kbd>⌘O</kbd> ファイル検索 &nbsp; <kbd>⌘D</kbd> Today
           </p>
         </div>
       {/if}

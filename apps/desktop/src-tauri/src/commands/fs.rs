@@ -222,3 +222,40 @@ pub fn rename_file(from: String, to: String, vault_path: String) -> Result<(), S
     }
     fs::rename(&abs_from, &abs_to).map_err(|e| e.to_string())
 }
+
+#[derive(Serialize, Clone)]
+pub struct DailyNoteResult {
+    pub path: String,
+    pub created: bool,
+}
+
+const DAILY_TEMPLATE: &str = "\n\n\n# 疑問\n\n## MNTSQ関連の疑問\n- [ ] \n## IT系の疑問\n- [ ] \n## その他疑問\n- [ ] \n\n# 学び\n- \n# 考えたこと\n- \n\n# 読書ログ\n- \n\n# フロントエンド積み上げ\n\n\n# やったこと\n- ";
+
+#[tauri::command]
+pub fn ensure_daily_note(vault_path: String) -> Result<DailyNoteResult, String> {
+    let now = chrono::Local::now();
+    let path = format!(
+        "00_daily/{}/{}/{}.md",
+        now.format("%Y"),
+        now.format("%m"),
+        now.format("%Y-%m-%d")
+    );
+    let abs_path = resolve_safe_path(&vault_path, &path)?;
+
+    if abs_path.exists() {
+        return Ok(DailyNoteResult {
+            path,
+            created: false,
+        });
+    }
+
+    if let Some(parent) = abs_path.parent() {
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    fs::write(&abs_path, DAILY_TEMPLATE).map_err(|e| e.to_string())?;
+
+    Ok(DailyNoteResult {
+        path,
+        created: true,
+    })
+}
