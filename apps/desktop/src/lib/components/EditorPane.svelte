@@ -1,16 +1,18 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
   import { saveFile } from "../stores/vault.svelte";
-  import { getEditorState } from "../stores/editor.svelte";
+  import { getEditorState, toggleLivePreview } from "../stores/editor.svelte";
+  import { livePreview } from "@kotonoha/ui/livePreview";
 
   interface Props {
     content: string;
     filePath: string;
     vaultPath: string;
     onCursorLineChange?: (line: number) => void;
+    onWikilinkNavigate?: (target: string) => void;
   }
 
-  let { content, filePath, vaultPath, onCursorLineChange = () => {} }: Props = $props();
+  let { content, filePath, vaultPath, onCursorLineChange = () => {}, onWikilinkNavigate = () => {} }: Props = $props();
 
   const editor = getEditorState();
   let editorElement: HTMLDivElement;
@@ -18,7 +20,7 @@
   let saveTimer: ReturnType<typeof setTimeout> | null = null;
   let currentFilePath = $state(filePath);
 
-  async function initEditor() {
+  async function initEditor(useLivePreview: boolean) {
     const { EditorView, keymap, lineNumbers } = await import(
       "@codemirror/view"
     );
@@ -78,6 +80,9 @@
       { dark: true },
     );
 
+    // Preserve current doc content if view exists
+    const currentDoc = view ? view.state.doc.toString() : content;
+
     const extensions = [
       vim(),
       lineNumbers(),
@@ -86,6 +91,7 @@
       markdown({ base: markdownLanguage, codeLanguages: languages }),
       EditorView.lineWrapping,
       darkTheme,
+      ...(useLivePreview ? livePreview({ onWikilinkClick: onWikilinkNavigate }) : []),
       EditorView.updateListener.of((update: any) => {
         if (update.docChanged) {
           editor.isDirty = true;
@@ -105,9 +111,10 @@
     }
 
     view = new EditorView({
-      state: EditorState.create({ doc: content, extensions }),
+      state: EditorState.create({ doc: currentDoc, extensions }),
       parent: editorElement,
     });
+    view.focus();
   }
 
   function scheduleSave(newContent: string) {
@@ -123,8 +130,6 @@
     if (filePath !== currentFilePath) {
       currentFilePath = filePath;
       if (view) {
-        const { EditorState } = view.state.constructor;
-        // Re-dispatch the new content
         view.dispatch({
           changes: {
             from: 0,
@@ -132,12 +137,21 @@
             insert: content,
           },
         });
+        view.focus();
       }
     }
   });
 
+  // React to livePreview toggle
+  $effect(() => {
+    const lp = editor.livePreviewEnabled;
+    if (view && editorElement) {
+      initEditor(lp);
+    }
+  });
+
   onMount(() => {
-    initEditor();
+    initEditor(editor.livePreviewEnabled);
   });
 
   onDestroy(() => {
@@ -152,6 +166,22 @@
     {#if editor.isDirty}
       <span class="dirty-indicator" title="未保存の変更があります"></span>
     {/if}
+    <button
+      class="lp-toggle"
+      class:active={editor.livePreviewEnabled}
+      onclick={toggleLivePreview}
+      title={editor.livePreviewEnabled ? "Raw Markdown (⌘P)" : "Live Preview (⌘P)"}
+    >
+      {#if editor.livePreviewEnabled}
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+        </svg>
+      {:else}
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/>
+        </svg>
+      {/if}
+    </button>
   </div>
   <div class="editor-content" bind:this={editorElement}></div>
 </div>
@@ -176,6 +206,7 @@
 
   .filename {
     font-family: var(--font-mono);
+    flex: 1;
   }
 
   .dirty-indicator {
@@ -183,6 +214,30 @@
     height: 8px;
     border-radius: 50%;
     background: var(--peach);
+  }
+
+  .lp-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    background: none;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: color 0.15s, background 0.15s;
+  }
+
+  .lp-toggle:hover {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+  }
+
+  .lp-toggle.active {
+    color: var(--accent);
   }
 
   .editor-content {

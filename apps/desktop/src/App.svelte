@@ -1,7 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import EditorPane from "./lib/components/EditorPane.svelte";
-  import PreviewPane from "./lib/components/PreviewPane.svelte";
   import BacklinkPanel from "./lib/components/BacklinkPanel.svelte";
   import FuzzySearchModal from "./lib/components/FuzzySearchModal.svelte";
   import GitPanel from "./lib/components/GitPanel.svelte";
@@ -16,11 +15,11 @@
   } from "./lib/stores/vault.svelte";
   import {
     getEditorState,
-    togglePreview,
     toggleFuzzySearch,
     closeFuzzySearch,
     toggleBacklinks,
     toggleGitPanel,
+    toggleLivePreview,
   } from "./lib/stores/editor.svelte";
   import { startGitPolling, stopGitPolling } from "./lib/stores/git.svelte";
 
@@ -29,7 +28,6 @@
 
   let initialized = $state(false);
   let hasVault = $state(false);
-  let cursorLine = $state(0);
 
   onMount(async () => {
     hasVault = await initVault();
@@ -86,7 +84,7 @@
       toggleFuzzySearch("filename");
     } else if (meta && e.key === "p") {
       e.preventDefault();
-      togglePreview();
+      toggleLivePreview();
     } else if (meta && e.key === "b") {
       e.preventDefault();
       toggleBacklinks();
@@ -121,24 +119,17 @@
               content={vault.fileContent}
               filePath={vault.currentFile}
               vaultPath={vault.meta?.path ?? ""}
-              onCursorLineChange={(line) => (cursorLine = line)}
+              onCursorLineChange={() => {}}
+              onWikilinkNavigate={handleWikilinkNavigate}
             />
           </div>
 
-          {#if editor.showPreview}
-            <div class="preview-area">
-              <PreviewPane
-                content={vault.fileContent}
-                vaultPath={vault.meta?.path ?? ""}
-                cursorLine={cursorLine}
-                onWikilinkClick={handleWikilinkNavigate}
+          {#if editor.showBacklinks}
+            <div class="backlinks-area">
+              <BacklinkPanel
+                filePath={vault.currentFile}
+                onSelect={handleFileSelect}
               />
-              {#if editor.showBacklinks}
-                <BacklinkPanel
-                  filePath={vault.currentFile}
-                  onSelect={handleFileSelect}
-                />
-              {/if}
             </div>
           {/if}
         </div>
@@ -201,14 +192,13 @@
   .editor-pane {
     flex: 1;
     min-width: 0;
-    border-right: 1px solid var(--border);
   }
 
-  .preview-area {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
+  .backlinks-area {
+    width: 280px;
+    flex-shrink: 0;
+    border-left: 1px solid var(--border);
+    overflow-y: auto;
   }
 
   .empty-state {

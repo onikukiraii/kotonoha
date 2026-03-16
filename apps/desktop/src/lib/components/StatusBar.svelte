@@ -24,8 +24,9 @@
   </div>
   <div class="right">
     <span class="hint">⌘O 検索</span>
-    <span class="hint">⌘P プレビュー</span>
-    <span class="hint">⌘\ サイドバー</span>
+    <span class="hint">⌘D Today</span>
+    <span class="hint">⌘B バックリンク</span>
+    <span class="hint">⌘G Git</span>
   </div>
 </footer>
 

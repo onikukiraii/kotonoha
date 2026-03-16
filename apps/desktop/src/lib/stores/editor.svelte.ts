@@ -1,8 +1,8 @@
 let isDirty = $state(false);
-let showPreview = $state(true);
 let showFuzzySearch = $state(false);
 let showBacklinks = $state(false);
 let showGitPanel = $state(false);
+let livePreviewEnabled = $state(true);
 let searchMode = $state<"filename" | "fulltext" | "tree">("filename");
 
 export function getEditorState() {
@@ -13,9 +13,6 @@ export function getEditorState() {
     set isDirty(v: boolean) {
       isDirty = v;
     },
-    get showPreview() {
-      return showPreview;
-    },
     get showFuzzySearch() {
       return showFuzzySearch;
     },
@@ -24,6 +21,9 @@ export function getEditorState() {
     },
     get showGitPanel() {
       return showGitPanel;
+    },
+    get livePreviewEnabled() {
+      return livePreviewEnabled;
     },
     get searchMode() {
       return searchMode;
@@ -34,8 +34,8 @@ export function getEditorState() {
   };
 }
 
-export function togglePreview() {
-  showPreview = !showPreview;
+export function toggleLivePreview() {
+  livePreviewEnabled = !livePreviewEnabled;
 }
 
 export function toggleFuzzySearch(mode?: "filename" | "fulltext" | "tree") {
