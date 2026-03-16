@@ -297,6 +297,7 @@
                 this={Editor}
                 content={editorContent}
                 vimMode={false}
+                livePreviewMode={true}
                 onChange={handleEditorChange}
                 onCursorLineChange={(line: number) => (cursorLine = line)}
                 onWikilinkNavigate={handleWikilinkClick}
