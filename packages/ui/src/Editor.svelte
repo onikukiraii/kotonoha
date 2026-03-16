@@ -1,9 +1,11 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte'
+  import { livePreview } from './livePreview'
 
   interface Props {
     content?: string
     vimMode?: boolean
+    livePreviewMode?: boolean
     onChange?: (content: string) => void
     onCursorLineChange?: (line: number) => void
     onWikilinkNavigate?: (target: string) => void
@@ -12,6 +14,7 @@
   let {
     content = $bindable(''),
     vimMode = false,
+    livePreviewMode = false,
     onChange = () => {},
     onCursorLineChange = () => {},
     onWikilinkNavigate = () => {},
@@ -83,7 +86,6 @@
       syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
       markdown({ base: markdownLanguage, codeLanguages: languages }),
       EditorView.lineWrapping,
-      wikilinkPlugin,
       darkTheme,
       keymap.of([...defaultKeymap, ...historyKeymap]),
       EditorView.updateListener.of((update: any) => {
@@ -95,26 +97,35 @@
           onCursorLineChange(line)
         }
       }),
-      EditorView.domEventHandlers({
-        click(event: MouseEvent, editorView: any) {
-          const target = event.target as HTMLElement
-          if (target.closest('.cm-wikilink')) {
-            const pos = editorView.posAtCoords({ x: event.clientX, y: event.clientY })
-            if (pos !== null) {
-              const text = editorView.state.doc.toString()
-              const regex = /\[\[([^\]]+)\]\]/g
-              let match
-              while ((match = regex.exec(text)) !== null) {
-                if (pos >= match.index && pos <= match.index + match[0].length) {
-                  onWikilinkNavigate(match[1])
-                  break
+    ]
+
+    if (livePreviewMode) {
+      extensions.push(...livePreview({ onWikilinkClick: onWikilinkNavigate }))
+    } else {
+      // Fallback: basic wikilink decoration + click handler (original behavior)
+      extensions.push(wikilinkPlugin)
+      extensions.push(
+        EditorView.domEventHandlers({
+          click(event: MouseEvent, editorView: any) {
+            const target = event.target as HTMLElement
+            if (target.closest('.cm-wikilink')) {
+              const pos = editorView.posAtCoords({ x: event.clientX, y: event.clientY })
+              if (pos !== null) {
+                const text = editorView.state.doc.toString()
+                const regex = /\[\[([^\]]+)\]\]/g
+                let match
+                while ((match = regex.exec(text)) !== null) {
+                  if (pos >= match.index && pos <= match.index + match[0].length) {
+                    onWikilinkNavigate(match[1])
+                    break
+                  }
                 }
               }
             }
-          }
-        },
-      }),
-    ]
+          },
+        }),
+      )
+    }
 
     if (vimMode) {
       const { vim } = await import('@replit/codemirror-vim')

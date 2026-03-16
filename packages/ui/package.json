@@ -13,6 +13,10 @@
     "./daily": {
       "types": "./src/daily.ts",
       "import": "./src/daily.ts"
+    },
+    "./livePreview": {
+      "types": "./src/livePreview.ts",
+      "import": "./src/livePreview.ts"
     }
   },
   "scripts": {
