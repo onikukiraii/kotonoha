@@ -41,16 +41,22 @@ class CheckboxWidget extends WidgetType {
   }
 }
 
+const BULLET_CHARS = ['•', '◦', '▸', '▹']
+
 class BulletWidget extends WidgetType {
+  constructor(readonly depth: number) {
+    super()
+  }
+
   toDOM(): HTMLElement {
     const span = document.createElement('span')
     span.className = 'cm-lp-bullet'
-    span.textContent = '•'
+    span.textContent = BULLET_CHARS[this.depth % BULLET_CHARS.length]
     return span
   }
 
-  eq() {
-    return true
+  eq(other: BulletWidget) {
+    return this.depth === other.depth
   }
 }
 
@@ -371,12 +377,20 @@ function buildDecorations(view: EditorView, options: LivePreviewOptions): Decora
           const markText = state.doc.sliceString(node.from, node.to)
           // Only for unordered list markers (-, *, +), not ordered (1., 2.)
           if (/^[-*+]$/.test(markText) && !onCursor) {
-            // Replace "- " with bullet widget
+            // Count nesting depth by walking up BulletList ancestors
+            let depth = 0
+            let parent = node.node.parent
+            while (parent) {
+              if (parent.type.name === 'BulletList') depth++
+              parent = parent.parent
+            }
+            // depth starts at 1 (the current BulletList), so subtract 1
+            depth = Math.max(0, depth - 1)
             const afterMark = Math.min(node.to + 1, state.doc.lineAt(node.from).to)
             entries.push({
               from: node.from,
               to: afterMark,
-              deco: Decoration.replace({ widget: new BulletWidget() }),
+              deco: Decoration.replace({ widget: new BulletWidget(depth) }),
             })
           }
           return
