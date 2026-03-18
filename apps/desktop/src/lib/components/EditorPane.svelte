@@ -83,8 +83,26 @@
     // Preserve current doc content if view exists
     const currentDoc = view ? view.state.doc.toString() : content;
 
+    // macOS Emacs keybindings (work in vim insert mode)
+    const { cursorLineStart, cursorLineEnd } = await import("@codemirror/commands");
+    const emacsKeys = keymap.of([
+      { key: "Ctrl-a", run: cursorLineStart },
+      { key: "Ctrl-e", run: cursorLineEnd },
+      {
+        key: "Ctrl-k",
+        run: (v: any) => {
+          const head = v.state.selection.main.head;
+          const line = v.state.doc.lineAt(head);
+          if (head === line.to) return false;
+          v.dispatch({ changes: { from: head, to: line.to } });
+          return true;
+        },
+      },
+    ]);
+
     const extensions = [
       vim(),
+      emacsKeys,
       lineNumbers(),
       history(),
       keymap.of([...defaultKeymap, ...historyKeymap]),

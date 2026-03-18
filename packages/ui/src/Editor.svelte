@@ -79,7 +79,25 @@
       { dark: true },
     )
 
+    // macOS Emacs keybindings
+    const { cursorLineStart, cursorLineEnd } = await import('@codemirror/commands')
+    const emacsKeys = keymap.of([
+      { key: 'Ctrl-a', run: cursorLineStart },
+      { key: 'Ctrl-e', run: cursorLineEnd },
+      {
+        key: 'Ctrl-k',
+        run: (v: any) => {
+          const head = v.state.selection.main.head
+          const line = v.state.doc.lineAt(head)
+          if (head === line.to) return false
+          v.dispatch({ changes: { from: head, to: line.to } })
+          return true
+        },
+      },
+    ])
+
     const extensions = [
+      emacsKeys,
       history(),
       bracketMatching(),
       closeBrackets(),
