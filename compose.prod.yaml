@@ -1,0 +1,17 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3003:3000"
+    volumes:
+      - vault-data:/app/vault
+      - app-data:/app/data
+    env_file:
+      - .env
+    restart: always
+
+volumes:
+  vault-data:
+  app-data:

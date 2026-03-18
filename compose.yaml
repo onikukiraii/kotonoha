@@ -1,0 +1,18 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: base
+    ports:
+      - "3003:5173"
+    volumes:
+      - ./packages:/app/packages
+      - ./apps/web:/app/apps/web
+      - ./vault:/app/vault
+      - /app/node_modules
+    command: ["pnpm", "dev:web", "--", "--host", "0.0.0.0"]
+    env_file:
+      - .env
+    environment:
+      - VAULT_PATH=/app/vault
