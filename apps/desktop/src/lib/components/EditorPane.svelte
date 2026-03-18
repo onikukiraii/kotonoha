@@ -21,7 +21,7 @@
   let currentFilePath = $state(filePath);
 
   async function initEditor(useLivePreview: boolean) {
-    const { EditorView, keymap, lineNumbers } = await import(
+    const { EditorView, keymap, lineNumbers, drawSelection } = await import(
       "@codemirror/view"
     );
     const { EditorState } = await import("@codemirror/state");
@@ -29,10 +29,10 @@
       "@codemirror/lang-markdown"
     );
     const { languages } = await import("@codemirror/language-data");
-    const { defaultKeymap, history, historyKeymap } = await import(
+    const { defaultKeymap, history, historyKeymap, indentWithTab } = await import(
       "@codemirror/commands"
     );
-    const { vim } = await import("@replit/codemirror-vim");
+    const { vim, getCM } = await import("@replit/codemirror-vim");
 
     const darkTheme = EditorView.theme(
       {
@@ -57,7 +57,7 @@
         },
         ".cm-activeLineGutter": { backgroundColor: "var(--bg-tertiary)" },
         "&.cm-focused .cm-selectionBackground, .cm-selectionBackground": {
-          backgroundColor: "rgba(137, 180, 250, 0.2)",
+          backgroundColor: "rgba(137, 180, 250, 0.45) !important",
         },
         ".cm-panels": {
           backgroundColor: "var(--bg-secondary)",
@@ -102,7 +102,9 @@
 
     const extensions = [
       vim(),
+      drawSelection(),
       emacsKeys,
+      keymap.of([indentWithTab]),
       lineNumbers(),
       history(),
       keymap.of([...defaultKeymap, ...historyKeymap]),
@@ -132,6 +134,21 @@
       state: EditorState.create({ doc: currentDoc, extensions }),
       parent: editorElement,
     });
+
+    // Listen for vim mode changes
+    const cm = getCM(view);
+    if (cm) {
+      cm.on("vim-mode-change", (e: { mode: string; subMode?: string }) => {
+        if (e.mode === "normal") editor.vimMode = "NORMAL";
+        else if (e.mode === "insert") editor.vimMode = "INSERT";
+        else if (e.mode === "visual") {
+          if (e.subMode === "linewise") editor.vimMode = "V-LINE";
+          else if (e.subMode === "blockwise") editor.vimMode = "V-BLOCK";
+          else editor.vimMode = "VISUAL";
+        } else if (e.mode === "replace") editor.vimMode = "REPLACE";
+      });
+    }
+
     view.focus();
   }
 
@@ -180,6 +197,7 @@
 
 <div class="editor-container">
   <div class="editor-header">
+    <span class="vim-mode" class:insert={editor.vimMode === "INSERT"} class:visual={editor.vimMode.startsWith("V") || editor.vimMode === "VISUAL"} class:replace={editor.vimMode === "REPLACE"}>{editor.vimMode}</span>
     <span class="filename">{filePath.replace(/\.md$/, "")}</span>
     {#if editor.isDirty}
       <span class="dirty-indicator" title="未保存の変更があります"></span>
@@ -220,6 +238,31 @@
     border-bottom: 1px solid var(--border);
     font-size: 12px;
     color: var(--text-muted);
+  }
+
+  .vim-mode {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    padding: 1px 6px;
+    border-radius: 3px;
+    background: var(--bg-tertiary);
+    color: var(--text-muted);
+  }
+
+  .vim-mode.insert {
+    background: var(--green, #a6e3a1);
+    color: var(--bg-primary, #1e1e2e);
+  }
+
+  .vim-mode.visual {
+    background: var(--mauve, #cba6f7);
+    color: var(--bg-primary, #1e1e2e);
+  }
+
+  .vim-mode.replace {
+    background: var(--red, #f38ba8);
+    color: var(--bg-primary, #1e1e2e);
   }
 
   .filename {

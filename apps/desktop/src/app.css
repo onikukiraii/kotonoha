@@ -64,3 +64,12 @@ a {
 a:hover {
   color: var(--accent-hover);
 }
+
+/* Vim visual mode selection - ensure visibility */
+.cm-editor .cm-selectionBackground {
+  background-color: rgba(137, 180, 250, 0.3) !important;
+}
+
+.cm-editor.cm-focused .cm-selectionBackground {
+  background-color: rgba(137, 180, 250, 0.45) !important;
+}

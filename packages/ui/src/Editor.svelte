@@ -29,7 +29,7 @@
     const { EditorState, StateField } = await import('@codemirror/state')
     const { markdown, markdownLanguage } = await import('@codemirror/lang-markdown')
     const { languages } = await import('@codemirror/language-data')
-    const { defaultKeymap, history, historyKeymap } = await import('@codemirror/commands')
+    const { defaultKeymap, history, historyKeymap, indentWithTab } = await import('@codemirror/commands')
     const { syntaxHighlighting, defaultHighlightStyle, bracketMatching } = await import('@codemirror/language')
     const { closeBrackets } = await import('@codemirror/autocomplete')
 
@@ -98,6 +98,7 @@
 
     const extensions = [
       emacsKeys,
+      keymap.of([indentWithTab]),
       history(),
       bracketMatching(),
       closeBrackets(),

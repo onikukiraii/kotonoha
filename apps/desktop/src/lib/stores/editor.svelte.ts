@@ -4,6 +4,7 @@ let showBacklinks = $state(false);
 let showGitPanel = $state(false);
 let livePreviewEnabled = $state(true);
 let searchMode = $state<"filename" | "fulltext" | "tree">("filename");
+let vimMode = $state("NORMAL");
 
 export function getEditorState() {
   return {
@@ -30,6 +31,12 @@ export function getEditorState() {
     },
     set searchMode(v: "filename" | "fulltext" | "tree") {
       searchMode = v;
+    },
+    get vimMode() {
+      return vimMode;
+    },
+    set vimMode(v: string) {
+      vimMode = v;
     },
   };
 }
