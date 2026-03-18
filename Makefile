@@ -1,4 +1,4 @@
-.PHONY: dev build docker-up docker-down lint typecheck hash-password
+.PHONY: dev build docker-up docker-down prod-up prod-down prod-logs lint typecheck hash-password
 
 dev:
 	pnpm dev:web
@@ -11,6 +11,15 @@ docker-up:
 
 docker-down:
 	docker compose down
+
+prod-up:
+	docker compose -f compose.prod.yaml up -d --build
+
+prod-down:
+	docker compose -f compose.prod.yaml down
+
+prod-logs:
+	docker compose -f compose.prod.yaml logs -f
 
 lint:
 	pnpm -r lint
