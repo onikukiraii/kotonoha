@@ -12,6 +12,7 @@
     initVault,
     openVault,
     openDailyNote,
+    reloadVault,
   } from "./lib/stores/vault.svelte";
   import {
     getEditorState,
@@ -140,6 +141,9 @@
     } else if (meta && e.key === "[") {
       e.preventDefault();
       activatePrevTab();
+    } else if (meta && e.key === "r") {
+      e.preventDefault();
+      reloadVault();
     }
   }
 </script>
@@ -191,7 +195,7 @@
         <div class="empty-state">
           <p>ファイルを選択してください</p>
           <p class="hint">
-            <kbd>⌘O</kbd> ファイル検索 &nbsp; <kbd>⌘D</kbd> Today &nbsp; <kbd>⌘[</kbd><kbd>⌘]</kbd> タブ移動 &nbsp; <kbd>⌘W</kbd> タブを閉じる
+            <kbd>⌘O</kbd> ファイル検索 &nbsp; <kbd>⌘D</kbd> Today &nbsp; <kbd>⌘R</kbd> リロード &nbsp; <kbd>⌘[</kbd><kbd>⌘]</kbd> タブ移動 &nbsp; <kbd>⌘W</kbd> タブを閉じる
           </p>
         </div>
       {/if}

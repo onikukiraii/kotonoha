@@ -62,6 +62,25 @@ async function buildIndex(): Promise<void> {
   }
 }
 
+export async function reloadVault(): Promise<void> {
+  if (!vaultMeta) return;
+  await loadFiles();
+  // Reload current file content if one is open
+  if (currentFile) {
+    try {
+      const content = await invoke<string>("read_file", {
+        path: currentFile,
+        vaultPath: vaultMeta.path,
+      });
+      fileContent = content;
+    } catch {
+      // File may have been deleted externally
+      currentFile = null;
+      fileContent = "";
+    }
+  }
+}
+
 export async function openFile(path: string): Promise<void> {
   if (!vaultMeta) return;
   const content = await invoke<string>("read_file", {
