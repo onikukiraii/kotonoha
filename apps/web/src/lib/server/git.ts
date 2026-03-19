@@ -1,6 +1,6 @@
 import simpleGit, { type SimpleGit } from 'simple-git'
 import path from 'path'
-import { existsSync } from 'fs'
+import { existsSync, readFileSync, writeFileSync } from 'fs'
 import type { GitStatus } from '@kotonoha/types'
 import { env } from './env.js'
 
@@ -30,6 +30,81 @@ async function configureGitUser(): Promise<void> {
   await simpleGit().raw(['config', '--global', 'user.email', env.GIT_USER_EMAIL])
 }
 
+/**
+ * 競合マーカーを除去して両方の内容を結合する
+ * <<<<<<< / ======= / >>>>>>> マーカーを取り除き、両側の内容を保持する
+ */
+function resolveConflictMarkers(content: string): string {
+  const lines = content.split('\n')
+  const result: string[] = []
+  let inConflict = false
+  let inOurs = false
+
+  for (const line of lines) {
+    if (line.startsWith('<<<<<<<')) {
+      inConflict = true
+      inOurs = true
+      continue
+    }
+    if (line.startsWith('=======') && inConflict) {
+      inOurs = false
+      continue
+    }
+    if (line.startsWith('>>>>>>>') && inConflict) {
+      inConflict = false
+      inOurs = false
+      continue
+    }
+    result.push(line)
+  }
+
+  return result.join('\n')
+}
+
+/**
+ * 競合ファイルを自動解決（両方の内容をマージ）してコミットする
+ */
+async function resolveConflictsAndCommit(git: SimpleGit): Promise<string[]> {
+  const status = await git.status()
+  const conflicted = status.conflicted
+  if (conflicted.length === 0) return []
+
+  console.log(`[git] resolving ${conflicted.length} conflicted file(s):`, conflicted)
+
+  for (const file of conflicted) {
+    const filePath = path.join(env.VAULT_PATH, file)
+    if (existsSync(filePath)) {
+      const content = readFileSync(filePath, 'utf-8')
+      const resolved = resolveConflictMarkers(content)
+      writeFileSync(filePath, resolved, 'utf-8')
+      console.log(`[git] resolved conflicts in: ${file}`)
+    }
+    await git.add(file)
+  }
+
+  await git.commit('auto: resolve merge conflicts (keep both changes)')
+  console.log('[git] committed conflict resolution')
+  return conflicted
+}
+
+/**
+ * rebaseではなくmergeでpullし、競合があれば自動解決する
+ */
+async function pullWithConflictResolution(git: SimpleGit): Promise<{ updated: boolean; resolved: string[] }> {
+  try {
+    const result = await git.pull('origin', 'main')
+    return { updated: result.files.length > 0, resolved: [] }
+  } catch (pullErr) {
+    // merge競合が発生した場合、自動解決を試みる
+    const status = await git.status()
+    if (status.conflicted.length > 0) {
+      const resolved = await resolveConflictsAndCommit(git)
+      return { updated: true, resolved }
+    }
+    throw pullErr
+  }
+}
+
 export async function initOrCloneVault(): Promise<void> {
   return withGitLock(async () => {
     const gitDir = path.join(env.VAULT_PATH, '.git')
@@ -44,6 +119,29 @@ export async function initOrCloneVault(): Promise<void> {
           await git.remote(['set-url', 'origin', authUrl])
         }
 
+        // rebase途中の状態が残っていたらabortする
+        try {
+          const rebaseDir = path.join(env.VAULT_PATH, '.git', 'rebase-merge')
+          const rebaseApplyDir = path.join(env.VAULT_PATH, '.git', 'rebase-apply')
+          if (existsSync(rebaseDir) || existsSync(rebaseApplyDir)) {
+            console.log('[git] aborting incomplete rebase from previous session')
+            await git.rebase(['--abort'])
+          }
+        } catch {
+          // rebase --abort自体が失敗しても続行
+        }
+
+        // merge途中の状態が残っていたらabortする
+        try {
+          const mergeHead = path.join(env.VAULT_PATH, '.git', 'MERGE_HEAD')
+          if (existsSync(mergeHead)) {
+            console.log('[git] aborting incomplete merge from previous session')
+            await git.merge(['--abort'])
+          }
+        } catch {
+          // merge --abort自体が失敗しても続行
+        }
+
         // Commit any uncommitted local changes before pulling
         const status = await git.status()
         const hasChanges =
@@ -56,8 +154,12 @@ export async function initOrCloneVault(): Promise<void> {
           console.log('[git] committed local changes before startup pull')
         }
 
-        await git.pull('origin', 'main', { '--rebase': null })
-        console.log('[git] startup pull completed')
+        const { resolved } = await pullWithConflictResolution(git)
+        if (resolved.length > 0) {
+          console.log('[git] startup pull completed with auto-resolved conflicts:', resolved)
+        } else {
+          console.log('[git] startup pull completed')
+        }
       } catch (err) {
         console.error('[git] startup pull failed:', (err as Error).message)
       }
@@ -101,17 +203,14 @@ export async function gitPull(): Promise<{ updated: boolean; conflicts: string[]
       console.log('[git] committed local changes before pull')
     }
 
-    const result = await git.pull('origin', 'main', { '--rebase': null })
-    const conflicts: string[] = []
-
-    const postStatus = await git.status()
-    for (const file of postStatus.conflicted) {
-      conflicts.push(file)
+    const { updated, resolved } = await pullWithConflictResolution(git)
+    if (resolved.length > 0) {
+      console.log('[git] pull completed with auto-resolved conflicts:', resolved)
     }
 
     return {
-      updated: result.files.length > 0,
-      conflicts,
+      updated,
+      conflicts: [], // 自動解決済みなので空
     }
   })
 }
