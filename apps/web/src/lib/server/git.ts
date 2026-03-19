@@ -56,7 +56,7 @@ export async function initOrCloneVault(): Promise<void> {
           console.log('[git] committed local changes before startup pull')
         }
 
-        await git.pull('origin', 'main')
+        await git.pull('origin', 'main', { '--rebase': null })
         console.log('[git] startup pull completed')
       } catch (err) {
         console.error('[git] startup pull failed:', (err as Error).message)
@@ -101,14 +101,12 @@ export async function gitPull(): Promise<{ updated: boolean; conflicts: string[]
       console.log('[git] committed local changes before pull')
     }
 
-    const result = await git.pull('origin', 'main')
+    const result = await git.pull('origin', 'main', { '--rebase': null })
     const conflicts: string[] = []
 
-    if (result.files.length > 0) {
-      const postStatus = await git.status()
-      for (const file of postStatus.conflicted) {
-        conflicts.push(file)
-      }
+    const postStatus = await git.status()
+    for (const file of postStatus.conflicted) {
+      conflicts.push(file)
     }
 
     return {
