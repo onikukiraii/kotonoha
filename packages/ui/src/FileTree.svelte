@@ -52,6 +52,11 @@
     expandedDirs = next
   }
 
+  function scrollToFocused() {
+    const el = treeElement?.querySelector(`[data-index="${focusedIndex}"]`)
+    el?.scrollIntoView({ block: 'nearest' })
+  }
+
   function handleClick(node: FileNode) {
     if (node.is_dir) {
       toggleDir(node.path)
@@ -74,11 +79,13 @@
       case 'ArrowDown':
         event.preventDefault()
         focusedIndex = Math.min(focusedIndex + 1, flat.length - 1)
+        scrollToFocused()
         break
       case 'k':
       case 'ArrowUp':
         event.preventDefault()
         focusedIndex = Math.max(focusedIndex - 1, 0)
+        scrollToFocused()
         break
       case 'l':
       case 'Enter':
@@ -107,7 +114,10 @@
           const parentPath = node?.path.split('/').slice(0, -1).join('/')
           if (parentPath) {
             const parentIndex = flat.findIndex((n) => n.path === parentPath)
-            if (parentIndex >= 0) focusedIndex = parentIndex
+            if (parentIndex >= 0) {
+              focusedIndex = parentIndex
+              scrollToFocused()
+            }
           }
         }
         break
@@ -150,6 +160,7 @@
       class:selected={node.path === selectedPath}
       class:focused={keyboardMode && i === focusedIndex}
       class:directory={node.is_dir}
+      data-index={i}
       style="padding-left: {getDepth(node.path) * 16 + 12}px"
       onclick={() => handleClick(node)}
     >

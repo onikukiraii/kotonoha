@@ -25,6 +25,7 @@
   let selectedIndex = $state(0)
   let currentMode = $state<'filename' | 'fulltext'>(modes[0] ?? 'filename')
   let inputElement: HTMLInputElement | undefined = $state()
+  let resultsElement: HTMLDivElement | undefined = $state()
   let debounceTimer: ReturnType<typeof setTimeout> | null = null
 
   $effect(() => {
@@ -41,25 +42,34 @@
     }, 200)
   }
 
+  function scrollToSelected() {
+    const el = resultsElement?.querySelector(`[data-index="${selectedIndex}"]`)
+    el?.scrollIntoView({ block: 'nearest' })
+  }
+
   function handleKeydown(event: KeyboardEvent) {
     switch (event.key) {
       case 'ArrowDown':
         event.preventDefault()
         selectedIndex = Math.min(selectedIndex + 1, results.length - 1)
+        scrollToSelected()
         break
       case 'j':
         if (fullscreen || !event.ctrlKey) break
         event.preventDefault()
         selectedIndex = Math.min(selectedIndex + 1, results.length - 1)
+        scrollToSelected()
         break
       case 'ArrowUp':
         event.preventDefault()
         selectedIndex = Math.max(selectedIndex - 1, 0)
+        scrollToSelected()
         break
       case 'k':
         if (fullscreen || !event.ctrlKey) break
         event.preventDefault()
         selectedIndex = Math.max(selectedIndex - 1, 0)
+        scrollToSelected()
         break
       case 'Enter':
         event.preventDefault()
@@ -131,12 +141,13 @@
       autocomplete="off"
     />
 
-    <div class="results">
+    <div class="results" bind:this={resultsElement}>
       {#each results as result, i}
         <!-- svelte-ignore a11y_click_events_have_key_events -->
         <div
           class="result-item"
           class:selected={i === selectedIndex}
+          data-index={i}
           onclick={() => onSelect(result)}
         >
           <div class="result-filename">{result.filename}</div>

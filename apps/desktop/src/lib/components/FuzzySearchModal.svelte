@@ -56,6 +56,7 @@
   let newFileName = $state("");
   let treeInputElement: HTMLInputElement;
   let treeListElement: HTMLDivElement;
+  let searchListElement: HTMLDivElement;
 
   const fileIcons: Record<string, { icon: string; color: string }> = {
     md: { icon: "M", color: "#89b4fa" },
@@ -183,6 +184,11 @@
     newFileName = "";
   }
 
+  function searchScrollIntoView() {
+    const el = searchListElement?.querySelector(`[data-index="${selectedIndex}"]`);
+    el?.scrollIntoView({ block: "nearest" });
+  }
+
   // --- Keydown handlers ---
   function handleSearchKeydown(e: KeyboardEvent) {
     if (e.key === "Escape") {
@@ -190,9 +196,11 @@
     } else if (e.key === "ArrowDown") {
       e.preventDefault();
       selectedIndex = Math.min(selectedIndex + 1, results.length - 1);
+      searchScrollIntoView();
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
       selectedIndex = Math.max(selectedIndex - 1, 0);
+      searchScrollIntoView();
     } else if (e.key === "Enter" && results[selectedIndex]) {
       onSelect(results[selectedIndex].path);
     } else if (e.key === "Tab") {
@@ -411,11 +419,12 @@
       </div>
     {:else}
       <!-- Search mode -->
-      <div class="results">
+      <div class="results" bind:this={searchListElement}>
         {#each results as result, i}
           <button
             class="result-item"
             class:selected={i === selectedIndex}
+            data-index={i}
             onclick={() => onSelect(result.path)}
             onmouseenter={() => (selectedIndex = i)}
           >
