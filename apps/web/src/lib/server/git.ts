@@ -25,6 +25,11 @@ function getAuthUrl(): string {
   return url.toString()
 }
 
+async function configureGitUser(git: SimpleGit): Promise<void> {
+  await git.addConfig('user.name', env.GIT_USER_NAME)
+  await git.addConfig('user.email', env.GIT_USER_EMAIL)
+}
+
 export async function initOrCloneVault(): Promise<void> {
   return withGitLock(async () => {
     const gitDir = path.join(env.VAULT_PATH, '.git')
@@ -33,6 +38,7 @@ export async function initOrCloneVault(): Promise<void> {
       // Already a git repo, commit local changes then pull
       try {
         const git = getGit()
+        await configureGitUser(git)
         const authUrl = getAuthUrl()
         if (authUrl) {
           await git.remote(['set-url', 'origin', authUrl])
@@ -63,6 +69,7 @@ export async function initOrCloneVault(): Promise<void> {
       console.log(`[git] cloning from ${env.GITHUB_REPO_URL} to ${env.VAULT_PATH}`)
       try {
         await simpleGit().clone(authUrl, env.VAULT_PATH)
+        await configureGitUser(getGit())
         console.log('[git] clone completed')
       } catch (err) {
         console.error('[git] clone failed:', (err as Error).message)
@@ -73,6 +80,7 @@ export async function initOrCloneVault(): Promise<void> {
       if (!existsSync(gitDir)) {
         await getGit().init()
       }
+      await configureGitUser(getGit())
     }
   })
 }
