@@ -6,11 +6,12 @@ import {
   type ViewUpdate,
   type DecorationSet,
 } from '@codemirror/view'
-import { type Extension, type EditorState, RangeSetBuilder } from '@codemirror/state'
+import { type Extension, type EditorState, Prec, RangeSetBuilder } from '@codemirror/state'
 import { syntaxTree } from '@codemirror/language'
 
 export interface LivePreviewOptions {
   onWikilinkClick?: (target: string) => void
+  onLinkClick?: (url: string) => void
   onCheckboxToggle?: (pos: number, checked: boolean) => void
 }
 
@@ -273,6 +274,11 @@ function buildDecorations(view: EditorView, options: LivePreviewOptions): Decora
 
         // --- Link ---
         if (type === 'Link') {
+          // Skip if this is part of a wikilink [[...]]
+          const docText = state.doc.toString()
+          if (node.from > 0 && docText[node.from - 1] === '[') {
+            return false
+          }
           if (!onCursor) {
             const n = node.node
             let linkMarkCount = 0
@@ -399,7 +405,7 @@ function buildDecorations(view: EditorView, options: LivePreviewOptions): Decora
     })
   }
 
-  // --- Regex-based: Wikilinks ---
+  // --- Regex-based: Wikilinks [[target]] ---
   for (const { from, to } of view.visibleRanges) {
     const text = state.doc.sliceString(from, to)
     const regex = /\[\[([^\]]+)\]\]/g
@@ -408,20 +414,20 @@ function buildDecorations(view: EditorView, options: LivePreviewOptions): Decora
       const matchFrom = from + match.index
       const matchTo = matchFrom + match[0].length
       const matchLine = state.doc.lineAt(matchFrom).number
-      if (cursorLines.has(matchLine)) continue
+      const onCursor = cursorLines.has(matchLine)
 
-      // Hide [[ and ]]
-      entries.push({
-        from: matchFrom,
-        to: matchFrom + 2,
-        deco: Decoration.replace({}),
-      })
-      entries.push({
-        from: matchTo - 2,
-        to: matchTo,
-        deco: Decoration.replace({}),
-      })
-      // Style content
+      if (!onCursor) {
+        entries.push({
+          from: matchFrom,
+          to: matchFrom + 2,
+          deco: Decoration.replace({}),
+        })
+        entries.push({
+          from: matchTo - 2,
+          to: matchTo,
+          deco: Decoration.replace({}),
+        })
+      }
       entries.push({
         from: matchFrom,
         to: matchTo,
@@ -563,45 +569,47 @@ const livePreviewTheme = EditorView.theme(
 // --- Click handler ---
 
 function livePreviewClickHandler(options: LivePreviewOptions): Extension {
-  return EditorView.domEventHandlers({
-    click(event: MouseEvent, view: EditorView) {
-      const target = event.target as HTMLElement
-
-      // Wikilink click
-      if (target.closest('.cm-lp-wikilink') && options.onWikilinkClick) {
+  return Prec.highest(
+    EditorView.domEventHandlers({
+      mousedown(event: MouseEvent, view: EditorView) {
         const pos = view.posAtCoords({ x: event.clientX, y: event.clientY })
-        if (pos !== null) {
-          const text = view.state.doc.toString()
-          const regex = /\[\[([^\]]+)\]\]/g
+        if (pos === null) return false
+
+        const text = view.state.doc.toString()
+
+        if (options.onWikilinkClick) {
+          // Double-bracket wikilink: [[target]]
+          const doubleRegex = /\[\[([^\]]+)\]\]/g
           let match
-          while ((match = regex.exec(text)) !== null) {
+          while ((match = doubleRegex.exec(text)) !== null) {
             if (pos >= match.index && pos <= match.index + match[0].length) {
               event.preventDefault()
               options.onWikilinkClick(match[1])
-              break
+              return true
             }
           }
-        }
-      }
 
-      // Link click
-      if (target.closest('.cm-lp-link')) {
-        const pos = view.posAtCoords({ x: event.clientX, y: event.clientY })
-        if (pos !== null) {
-          const text = view.state.doc.toString()
-          const regex = /\[([^\]]*)\]\(([^)]+)\)/g
-          let match
-          while ((match = regex.exec(text)) !== null) {
-            if (pos >= match.index && pos <= match.index + match[0].length) {
-              event.preventDefault()
+        }
+
+        // Link click: [text](url)
+        const linkRegex = /\[([^\]]*)\]\(([^)]+)\)/g
+        let match
+        while ((match = linkRegex.exec(text)) !== null) {
+          if (pos >= match.index && pos <= match.index + match[0].length) {
+            event.preventDefault()
+            if (options.onLinkClick) {
+              options.onLinkClick(match[2])
+            } else {
               window.open(match[2], '_blank')
-              break
             }
+            return true
           }
         }
-      }
-    },
-  })
+
+        return false
+      },
+    }),
+  )
 }
 
 // --- Main export ---
