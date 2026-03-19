@@ -30,14 +30,27 @@ export async function initOrCloneVault(): Promise<void> {
     const gitDir = path.join(env.VAULT_PATH, '.git')
 
     if (existsSync(gitDir)) {
-      // Already a git repo, try pull
+      // Already a git repo, commit local changes then pull
       try {
+        const git = getGit()
         const authUrl = getAuthUrl()
         if (authUrl) {
-          const git = getGit()
           await git.remote(['set-url', 'origin', authUrl])
         }
-        await getGit().pull('origin', 'main')
+
+        // Commit any uncommitted local changes before pulling
+        const status = await git.status()
+        const hasChanges =
+          status.not_added.length > 0 ||
+          status.modified.length > 0 ||
+          status.staged.length > 0
+        if (hasChanges) {
+          await git.add('-A')
+          await git.commit('auto: commit local changes before pull')
+          console.log('[git] committed local changes before startup pull')
+        }
+
+        await git.pull('origin', 'main')
         console.log('[git] startup pull completed')
       } catch (err) {
         console.error('[git] startup pull failed:', (err as Error).message)
@@ -67,12 +80,25 @@ export async function initOrCloneVault(): Promise<void> {
 export async function gitPull(): Promise<{ updated: boolean; conflicts: string[] }> {
   return withGitLock(async () => {
     const git = getGit()
+
+    // Commit any local changes before pulling to avoid untracked file conflicts
+    const status = await git.status()
+    const hasChanges =
+      status.not_added.length > 0 ||
+      status.modified.length > 0 ||
+      status.staged.length > 0
+    if (hasChanges) {
+      await git.add('-A')
+      await git.commit('auto: commit local changes before pull')
+      console.log('[git] committed local changes before pull')
+    }
+
     const result = await git.pull('origin', 'main')
     const conflicts: string[] = []
 
     if (result.files.length > 0) {
-      const status = await git.status()
-      for (const file of status.conflicted) {
+      const postStatus = await git.status()
+      for (const file of postStatus.conflicted) {
         conflicts.push(file)
       }
     }
