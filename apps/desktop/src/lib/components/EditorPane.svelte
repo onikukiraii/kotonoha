@@ -1,8 +1,10 @@
 <script lang="ts">
-  import { onMount, onDestroy } from "svelte";
+  import { onMount, onDestroy, untrack } from "svelte";
   import { saveFile } from "../stores/vault.svelte";
   import { getEditorState, toggleLivePreview } from "../stores/editor.svelte";
+  import { getTabsState, setTabDirty, setEditorViewRef } from "../stores/tabs.svelte";
   import { livePreview } from "@kotonoha/ui/livePreview";
+  import { openUrl } from "@tauri-apps/plugin-opener";
 
   interface Props {
     content: string;
@@ -15,10 +17,10 @@
   let { content, filePath, vaultPath, onCursorLineChange = () => {}, onWikilinkNavigate = () => {} }: Props = $props();
 
   const editor = getEditorState();
+  const tabsState = getTabsState();
   let editorElement: HTMLDivElement;
   let view: any = null;
   let saveTimer: ReturnType<typeof setTimeout> | null = null;
-  let currentFilePath = $state(filePath);
 
   async function initEditor(useLivePreview: boolean) {
     const { EditorView, keymap, lineNumbers, drawSelection } = await import(
@@ -111,10 +113,13 @@
       markdown({ base: markdownLanguage, codeLanguages: languages }),
       EditorView.lineWrapping,
       darkTheme,
-      ...(useLivePreview ? livePreview({ onWikilinkClick: onWikilinkNavigate }) : []),
+      ...(useLivePreview ? livePreview({ onWikilinkClick: onWikilinkNavigate, onLinkClick: (url) => openUrl(url) }) : []),
       EditorView.updateListener.of((update: any) => {
         if (update.docChanged) {
           editor.isDirty = true;
+          if (tabsState.activeTabId) {
+            setTabDirty(tabsState.activeTabId, true);
+          }
           scheduleSave(update.state.doc.toString());
         }
         if (update.selectionSet || update.docChanged) {
@@ -149,39 +154,40 @@
       });
     }
 
+    setEditorViewRef(view);
     view.focus();
   }
 
   function scheduleSave(newContent: string) {
     if (saveTimer) clearTimeout(saveTimer);
     saveTimer = setTimeout(async () => {
-      await saveFile(currentFilePath, newContent);
+      await saveFile(filePath, newContent);
       editor.isDirty = false;
+      if (tabsState.activeTabId) {
+        setTabDirty(tabsState.activeTabId, false);
+      }
     }, 500);
   }
-
-  // React to filePath changes
-  $effect(() => {
-    if (filePath !== currentFilePath) {
-      currentFilePath = filePath;
-      if (view) {
-        view.dispatch({
-          changes: {
-            from: 0,
-            to: view.state.doc.length,
-            insert: content,
-          },
-        });
-        view.focus();
-      }
-    }
-  });
 
   // React to livePreview toggle
   $effect(() => {
     const lp = editor.livePreviewEnabled;
     if (view && editorElement) {
       initEditor(lp);
+    }
+  });
+
+  // Update editor content when navigating to a different file
+  // (safety net in case {#key} doesn't trigger component recreation)
+  $effect(() => {
+    const _fp = filePath;
+    if (view) {
+      const newContent = untrack(() => content);
+      if (view.state.doc.toString() !== newContent) {
+        view.dispatch({
+          changes: { from: 0, to: view.state.doc.length, insert: newContent },
+        });
+      }
     }
   });
 
@@ -192,16 +198,14 @@
   onDestroy(() => {
     if (saveTimer) clearTimeout(saveTimer);
     if (view) view.destroy();
+    setEditorViewRef(null);
   });
 </script>
 
 <div class="editor-container">
   <div class="editor-header">
     <span class="vim-mode" class:insert={editor.vimMode === "INSERT"} class:visual={editor.vimMode.startsWith("V") || editor.vimMode === "VISUAL"} class:replace={editor.vimMode === "REPLACE"}>{editor.vimMode}</span>
-    <span class="filename">{filePath.replace(/\.md$/, "")}</span>
-    {#if editor.isDirty}
-      <span class="dirty-indicator" title="未保存の変更があります"></span>
-    {/if}
+    <span class="header-spacer"></span>
     <button
       class="lp-toggle"
       class:active={editor.livePreviewEnabled}
@@ -265,16 +269,8 @@
     color: var(--bg-primary, #1e1e2e);
   }
 
-  .filename {
-    font-family: var(--font-mono);
+  .header-spacer {
     flex: 1;
-  }
-
-  .dirty-indicator {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--peach);
   }
 
   .lp-toggle {

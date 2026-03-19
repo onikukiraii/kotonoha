@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import EditorPane from "./lib/components/EditorPane.svelte";
+  import TabBar from "./lib/components/TabBar.svelte";
   import BacklinkPanel from "./lib/components/BacklinkPanel.svelte";
   import FuzzySearchModal from "./lib/components/FuzzySearchModal.svelte";
   import GitPanel from "./lib/components/GitPanel.svelte";
@@ -10,7 +11,6 @@
     getVaultState,
     initVault,
     openVault,
-    openFile,
     openDailyNote,
   } from "./lib/stores/vault.svelte";
   import {
@@ -21,10 +21,19 @@
     toggleGitPanel,
     toggleLivePreview,
   } from "./lib/stores/editor.svelte";
+  import {
+    getTabsState,
+    openTab,
+    closeTab,
+    activateTab,
+    activateNextTab,
+    activatePrevTab,
+  } from "./lib/stores/tabs.svelte";
   import { startGitPolling, stopGitPolling } from "./lib/stores/git.svelte";
 
   const vault = getVaultState();
   const editor = getEditorState();
+  const tabsState = getTabsState();
 
   let initialized = $state(false);
   let hasVault = $state(false);
@@ -62,19 +71,42 @@
     }
   }
 
-  function handleFileSelect(path: string) {
-    openFile(path);
+  async function handleFileSelect(path: string) {
+    await openTab(path);
   }
 
-  function handleWikilinkNavigate(target: string) {
-    // Find the file matching the wikilink target
-    const path = target.endsWith(".md") ? target : `${target}.md`;
-    openFile(path);
+  async function handleWikilinkNavigate(target: string) {
+    const name = target.endsWith(".md") ? target : `${target}.md`;
+
+    function findFile(nodes: import("@kotonoha/types").FileNode[], search: string): string | null {
+      for (const node of nodes) {
+        if (!node.is_dir && (node.name === search || node.path === search)) {
+          return node.path;
+        }
+        if (node.is_dir && node.children) {
+          const found = findFile(node.children, search);
+          if (found) return found;
+        }
+      }
+      return null;
+    }
+
+    const filePath = findFile(vault.fileTree, name);
+    if (filePath) {
+      await openTab(filePath);
+    }
   }
 
-  function handleSearchSelect(path: string) {
+  async function handleSearchSelect(path: string) {
     closeFuzzySearch();
-    openFile(path);
+    await openTab(path);
+  }
+
+  async function handleOpenDailyNote() {
+    const path = await openDailyNote();
+    if (path) {
+      await openTab(path);
+    }
   }
 
   function handleKeydown(e: KeyboardEvent) {
@@ -96,7 +128,18 @@
       toggleGitPanel();
     } else if (meta && e.key === "d") {
       e.preventDefault();
-      openDailyNote();
+      handleOpenDailyNote();
+    } else if (meta && e.key === "w") {
+      e.preventDefault();
+      if (tabsState.activeTabId) {
+        closeTab(tabsState.activeTabId);
+      }
+    } else if (meta && e.key === "]") {
+      e.preventDefault();
+      activateNextTab();
+    } else if (meta && e.key === "[") {
+      e.preventDefault();
+      activatePrevTab();
     }
   }
 </script>
@@ -112,16 +155,27 @@
 {:else}
   <div class="app-layout">
     <div class="main-area">
-      {#if vault.currentFile}
+      {#if tabsState.tabs.length > 0}
+        <TabBar
+          tabs={tabsState.tabs}
+          activeTabId={tabsState.activeTabId}
+          onActivate={(id) => activateTab(id)}
+          onClose={(id) => closeTab(id)}
+        />
+      {/if}
+
+      {#if tabsState.activeTabId && vault.currentFile}
         <div class="panes">
           <div class="editor-pane">
-            <EditorPane
-              content={vault.fileContent}
-              filePath={vault.currentFile}
-              vaultPath={vault.meta?.path ?? ""}
-              onCursorLineChange={() => {}}
-              onWikilinkNavigate={handleWikilinkNavigate}
-            />
+            {#key vault.currentFile}
+              <EditorPane
+                content={vault.fileContent}
+                filePath={vault.currentFile}
+                vaultPath={vault.meta?.path ?? ""}
+                onCursorLineChange={() => {}}
+                onWikilinkNavigate={handleWikilinkNavigate}
+              />
+            {/key}
           </div>
 
           {#if editor.showBacklinks}
@@ -137,7 +191,7 @@
         <div class="empty-state">
           <p>ファイルを選択してください</p>
           <p class="hint">
-            <kbd>⌘O</kbd> ファイル検索 &nbsp; <kbd>⌘D</kbd> Today
+            <kbd>⌘O</kbd> ファイル検索 &nbsp; <kbd>⌘D</kbd> Today &nbsp; <kbd>⌘[</kbd><kbd>⌘]</kbd> タブ移動 &nbsp; <kbd>⌘W</kbd> タブを閉じる
           </p>
         </div>
       {/if}

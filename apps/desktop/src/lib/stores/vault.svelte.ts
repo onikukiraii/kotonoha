@@ -96,12 +96,16 @@ export async function createNewFile(path: string): Promise<void> {
   if (!vaultMeta) return;
   await invoke("create_file", { path, vaultPath: vaultMeta.path });
   await loadFiles();
-  await openFile(path);
+  const { openTab } = await import("./tabs.svelte");
+  await openTab(path);
 }
 
 export async function deleteCurrentFile(path: string): Promise<void> {
   if (!vaultMeta) return;
   await invoke("delete_file", { path, vaultPath: vaultMeta.path });
+  // Close the tab for the deleted file
+  const { closeTabByPath } = await import("./tabs.svelte");
+  closeTabByPath(path);
   if (currentFile === path) {
     currentFile = null;
     fileContent = "";
@@ -115,18 +119,21 @@ export async function renameCurrentFile(
 ): Promise<void> {
   if (!vaultMeta) return;
   await invoke("rename_file", { from, to, vaultPath: vaultMeta.path });
+  // Update the tab for the renamed file
+  const { renameTab } = await import("./tabs.svelte");
+  renameTab(from, to);
   if (currentFile === from) {
     currentFile = to;
   }
   await loadFiles();
 }
 
-export async function openDailyNote(): Promise<void> {
-  if (!vaultMeta) return;
+export async function openDailyNote(): Promise<string | null> {
+  if (!vaultMeta) return null;
   const { path, created } = await invoke<{ path: string; created: boolean }>(
     "ensure_daily_note",
     { vaultPath: vaultMeta.path },
   );
   if (created) await loadFiles();
-  await openFile(path);
+  return path;
 }
