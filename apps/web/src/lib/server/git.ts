@@ -92,7 +92,7 @@ async function resolveConflictsAndCommit(git: SimpleGit): Promise<string[]> {
  */
 async function pullWithConflictResolution(git: SimpleGit): Promise<{ updated: boolean; resolved: string[] }> {
   try {
-    const result = await git.pull('origin', 'main')
+    const result = await git.pull('origin', 'main', { '--no-rebase': null })
     return { updated: result.files.length > 0, resolved: [] }
   } catch (pullErr) {
     // merge競合が発生した場合、自動解決を試みる
