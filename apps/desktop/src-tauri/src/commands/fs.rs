@@ -182,6 +182,7 @@ pub fn read_file(path: String, vault_path: String) -> Result<String, String> {
 #[tauri::command]
 pub fn write_file(path: String, content: String, vault_path: String) -> Result<u64, String> {
     let abs_path = resolve_safe_path(&vault_path, &path)?;
+    super::watcher::mark_self_write(abs_path.clone());
     if let Some(parent) = abs_path.parent() {
         fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
@@ -201,6 +202,7 @@ pub fn write_file(path: String, content: String, vault_path: String) -> Result<u
 #[tauri::command]
 pub fn create_file(path: String, vault_path: String) -> Result<(), String> {
     let abs_path = resolve_safe_path(&vault_path, &path)?;
+    super::watcher::mark_self_write(abs_path.clone());
     if let Some(parent) = abs_path.parent() {
         fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
@@ -210,6 +212,7 @@ pub fn create_file(path: String, vault_path: String) -> Result<(), String> {
 #[tauri::command]
 pub fn delete_file(path: String, vault_path: String) -> Result<(), String> {
     let abs_path = resolve_safe_path(&vault_path, &path)?;
+    super::watcher::mark_self_write(abs_path.clone());
     fs::remove_file(&abs_path).map_err(|e| e.to_string())
 }
 
@@ -217,6 +220,8 @@ pub fn delete_file(path: String, vault_path: String) -> Result<(), String> {
 pub fn rename_file(from: String, to: String, vault_path: String) -> Result<(), String> {
     let abs_from = resolve_safe_path(&vault_path, &from)?;
     let abs_to = resolve_safe_path(&vault_path, &to)?;
+    super::watcher::mark_self_write(abs_from.clone());
+    super::watcher::mark_self_write(abs_to.clone());
     if let Some(parent) = abs_to.parent() {
         fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
@@ -249,6 +254,7 @@ pub fn ensure_daily_note(vault_path: String) -> Result<DailyNoteResult, String> 
         });
     }
 
+    super::watcher::mark_self_write(abs_path.clone());
     if let Some(parent) = abs_path.parent() {
         fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }

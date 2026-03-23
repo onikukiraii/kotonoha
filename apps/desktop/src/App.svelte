@@ -31,6 +31,7 @@
     activatePrevTab,
   } from "./lib/stores/tabs.svelte";
   import { startGitPolling, stopGitPolling } from "./lib/stores/git.svelte";
+  import { startWatcher, stopWatcher } from "./lib/stores/watcher.svelte";
 
   const vault = getVaultState();
   const editor = getEditorState();
@@ -43,8 +44,14 @@
     hasVault = await initVault();
     if (hasVault && vault.meta) {
       startGitPolling(vault.meta.path);
+      await startWatcher(vault.meta.path);
     }
     initialized = true;
+
+    return () => {
+      stopGitPolling();
+      stopWatcher();
+    };
   });
 
   async function handleOpenVault() {
@@ -56,6 +63,7 @@
         hasVault = true;
         if (vault.meta) {
           startGitPolling(vault.meta.path);
+          await startWatcher(vault.meta.path);
         }
       }
     } catch (e) {
@@ -67,6 +75,7 @@
         hasVault = true;
         if (vault.meta) {
           startGitPolling(vault.meta.path);
+          await startWatcher(vault.meta.path);
         }
       }
     }
