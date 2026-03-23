@@ -564,6 +564,8 @@ const livePreviewTheme = EditorView.theme(
     },
     '.cm-lp-bullet': {
       marginRight: '4px',
+      width: '1.2em',
+      display: 'inline-block',
       color: 'var(--accent, #89b4fa)',
     },
   },

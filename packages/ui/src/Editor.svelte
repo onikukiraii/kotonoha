@@ -67,14 +67,14 @@
     const darkTheme = EditorView.theme(
       {
         '&': { backgroundColor: '#1e1d20', color: '#e0ddd5', height: '100%' },
-        '.cm-content': { caretColor: '#d4a574', fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", fontSize: '15px' },
+        '.cm-content': { caretColor: '#d4a574', fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", fontSize: '15px', lineHeight: '1.75', letterSpacing: '0.01em' },
         '.cm-cursor': { borderLeftColor: '#d4a574' },
         '.cm-activeLine': { backgroundColor: '#2c2a30' },
         '.cm-selectionBackground': { backgroundColor: '#3a2f1e' },
         '&.cm-focused .cm-selectionBackground': { backgroundColor: '#3a2f1e' },
         '.cm-gutters': { backgroundColor: '#1e1d20', color: '#6b665f', border: 'none' },
         '.cm-wikilink': { color: '#d4a574', textDecoration: 'underline', cursor: 'pointer' },
-        '.cm-line': { padding: '0 4px' },
+        '.cm-line': { padding: '1px 4px' },
       },
       { dark: true },
     )

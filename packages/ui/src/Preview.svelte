@@ -106,6 +106,7 @@
     font-family: var(--koto-font-body);
     font-size: 16px;
     line-height: 1.8;
+    letter-spacing: 0.02em;
     overflow-y: auto;
     height: 100%;
   }
@@ -222,13 +223,24 @@
     margin-right: 0.5em;
   }
 
+  .preview-container :global(p) {
+    margin: 0.8em 0;
+  }
+
   .preview-container :global(ul),
   .preview-container :global(ol) {
-    padding-left: 1.5em;
+    padding-left: 2em;
   }
 
   .preview-container :global(li) {
-    margin: 0.3em 0;
+    margin: 0.4em 0;
+  }
+
+  .preview-container :global(ul ul),
+  .preview-container :global(ol ol),
+  .preview-container :global(ul ol),
+  .preview-container :global(ol ul) {
+    margin-top: 0.3em;
   }
 
   .preview-container :global(hr) {

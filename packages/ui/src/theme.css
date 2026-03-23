@@ -34,6 +34,8 @@
   --koto-font-size-sm: 13px;
   --koto-font-size-base: 15px;
   --koto-font-size-lg: 16px;
+  --koto-line-height-body: 1.75;
+  --koto-list-indent: 2em;
 
   /* Spacing (4px grid) */
   --koto-space-1: 4px;
