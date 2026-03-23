@@ -20,13 +20,21 @@
   const tabsState = getTabsState();
   let editorElement: HTMLDivElement;
   let view: any = null;
+  let livePreviewCompartment: any = null;
   let saveTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function getLivePreviewExtensions(enabled: boolean) {
+    if (enabled) {
+      return livePreview({ onWikilinkClick: onWikilinkNavigate, onLinkClick: (url: string) => openUrl(url) });
+    }
+    return [];
+  }
 
   async function initEditor(useLivePreview: boolean) {
     const { EditorView, keymap, lineNumbers, drawSelection } = await import(
       "@codemirror/view"
     );
-    const { EditorState } = await import("@codemirror/state");
+    const { EditorState, Compartment } = await import("@codemirror/state");
     const { markdown, markdownLanguage } = await import(
       "@codemirror/lang-markdown"
     );
@@ -102,6 +110,9 @@
       },
     ]);
 
+    // Create compartment for live preview extensions (allows dynamic reconfigure)
+    livePreviewCompartment = new Compartment();
+
     const extensions = [
       vim(),
       drawSelection(),
@@ -113,7 +124,7 @@
       markdown({ base: markdownLanguage, codeLanguages: languages }),
       EditorView.lineWrapping,
       darkTheme,
-      ...(useLivePreview ? livePreview({ onWikilinkClick: onWikilinkNavigate, onLinkClick: (url) => openUrl(url) }) : []),
+      livePreviewCompartment.of(getLivePreviewExtensions(useLivePreview)),
       EditorView.updateListener.of((update: any) => {
         if (update.docChanged) {
           editor.isDirty = true;
@@ -169,11 +180,13 @@
     }, 500);
   }
 
-  // React to livePreview toggle
+  // React to livePreview toggle — reconfigure extensions without destroying the editor
   $effect(() => {
     const lp = editor.livePreviewEnabled;
-    if (view && editorElement) {
-      initEditor(lp);
+    if (view && livePreviewCompartment) {
+      view.dispatch({
+        effects: livePreviewCompartment.reconfigure(getLivePreviewExtensions(lp)),
+      });
     }
   });
 

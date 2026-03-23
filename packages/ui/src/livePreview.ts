@@ -131,9 +131,10 @@ function buildDecorations(view: EditorView, options: LivePreviewOptions): Decora
             if (cursor.firstChild()) {
               do {
                 if (cursor.type.name === 'HeaderMark') {
-                  // Hide the # marks and the space after
+                  // Hide the # marks and the space after (stay within the same line)
                   const markEnd = cursor.to
-                  const afterMark = Math.min(markEnd + 1, node.to)
+                  const lineEnd = state.doc.lineAt(cursor.from).to
+                  const afterMark = Math.min(markEnd + 1, lineEnd, node.to)
                   entries.push({
                     from: cursor.from,
                     to: afterMark,
@@ -250,11 +251,11 @@ function buildDecorations(view: EditorView, options: LivePreviewOptions): Decora
             if (c.firstChild()) {
               do {
                 if (c.type.name === 'CodeMark') {
-                  // Hide opening/closing ``` lines
+                  // Hide opening/closing ``` lines (stay within the line, don't cross newline)
                   const line = state.doc.lineAt(c.from)
                   entries.push({
                     from: line.from,
-                    to: Math.min(line.to + 1, state.doc.length),
+                    to: line.to,
                     deco: Decoration.replace({}),
                   })
                 } else if (c.type.name === 'CodeInfo') {
@@ -324,9 +325,10 @@ function buildDecorations(view: EditorView, options: LivePreviewOptions): Decora
             if (c.firstChild()) {
               do {
                 if (c.type.name === 'QuoteMark') {
-                  // Hide > and space
+                  // Hide > and space (stay within the same line)
                   const markEnd = c.to
-                  const afterMark = Math.min(markEnd + 1, node.to)
+                  const lineEnd = state.doc.lineAt(c.from).to
+                  const afterMark = Math.min(markEnd + 1, lineEnd, node.to)
                   entries.push({
                     from: c.from,
                     to: afterMark,
@@ -351,9 +353,11 @@ function buildDecorations(view: EditorView, options: LivePreviewOptions): Decora
         // --- HorizontalRule ---
         if (type === 'HorizontalRule') {
           if (!onCursor) {
+            // Replace only within the line (don't cross newline)
+            const hrLineEnd = state.doc.lineAt(node.from).to
             entries.push({
               from: node.from,
-              to: node.to,
+              to: Math.min(node.to, hrLineEnd),
               deco: Decoration.replace({ widget: new HorizontalRuleWidget() }),
             })
           }
