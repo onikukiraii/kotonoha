@@ -97,8 +97,8 @@ async function autoBackup(vaultPath: string): Promise<void> {
 
     try {
       await invoke("git_push", { vaultPath });
-    } catch {
-      // push failure is non-critical (e.g. no credentials configured)
+    } catch (err) {
+      console.warn("[git] auto-backup push failed:", err);
     }
 
     await loadGitStatus(vaultPath);

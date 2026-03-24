@@ -1,5 +1,5 @@
 import { env } from './env.js'
-import { gitAddAndCommit } from './git.js'
+import { gitAddAndCommit, gitPull, gitPush } from './git.js'
 
 const pendingFiles = new Set<string>()
 let idleTimer: ReturnType<typeof setTimeout> | null = null
@@ -34,8 +34,23 @@ async function commitPendingFiles(): Promise<void> {
         ? `auto: update ${files[0].split('/').pop()}`
         : `auto: update ${files.length} file(s)`
     await gitAddAndCommit(files, message)
+    console.log(`[auto-commit] committed: ${message}`)
+
+    // Pull before push to incorporate remote changes and avoid rejection
+    try {
+      await gitPull()
+    } catch (pullErr) {
+      console.error('[auto-commit] pull before push failed:', pullErr)
+    }
+
+    try {
+      await gitPush()
+      console.log('[auto-commit] pushed to remote')
+    } catch (pushErr) {
+      console.error('[auto-commit] push failed:', pushErr)
+    }
   } catch (err) {
-    console.error('Auto-commit failed:', err)
+    console.error('[auto-commit] commit failed:', err)
     // Re-add files for next attempt
     for (const f of files) {
       pendingFiles.add(f)
