@@ -1,5 +1,7 @@
 <script lang="ts">
   import type { FileNode } from "@kotonoha/types";
+  import { invoke } from "@tauri-apps/api/core";
+  import DOMPurify from "dompurify";
   import { onMount, tick } from "svelte";
   import { createNewFile } from "../stores/vault.svelte";
 
@@ -28,6 +30,12 @@
   let navigatorElement: HTMLDivElement;
   let listElement: HTMLDivElement;
   let inputElement: HTMLInputElement;
+
+  // Preview state
+  let previewHtml = $state("");
+  let previewLoading = $state(false);
+  let previewPath = $state<string | null>(null);
+  let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
   // File extension to icon/color mapping
   const fileIcons: Record<string, { icon: string; color: string }> = {
@@ -92,6 +100,48 @@
   }
 
   let flatItems = $derived(flattenTree(files, 0));
+
+  // Current cursor item's file path (null if directory)
+  let cursorFilePath = $derived.by(() => {
+    const item = flatItems[cursorIndex];
+    if (item && !item.node.is_dir) return item.node.path;
+    return null;
+  });
+
+  // Load preview when cursor file changes (debounced)
+  $effect(() => {
+    const path = cursorFilePath;
+    if (debounceTimer) clearTimeout(debounceTimer);
+
+    if (!path) {
+      previewHtml = "";
+      previewPath = null;
+      previewLoading = false;
+      return;
+    }
+
+    if (path === previewPath) return;
+
+    previewLoading = true;
+    debounceTimer = setTimeout(async () => {
+      try {
+        const content = await invoke<string>("read_file", { path, vaultPath });
+        // Check if cursor hasn't moved to a different file
+        if (cursorFilePath !== path) return;
+        const html = await invoke<string>("render_markdown", { content, vaultPath });
+        if (cursorFilePath !== path) return;
+        previewHtml = DOMPurify.sanitize(html, {
+          ADD_TAGS: ["mark"],
+          ADD_ATTR: ["data-target", "data-source-line", "class"],
+        });
+        previewPath = path;
+      } catch {
+        previewHtml = "";
+        previewPath = null;
+      }
+      previewLoading = false;
+    }, 150);
+  });
 
   // Set initial cursor to currently selected file
   $effect(() => {
@@ -265,52 +315,66 @@
       </div>
     {/if}
 
-    <div class="file-list" bind:this={listElement}>
-      {#each flatItems as item, i}
-        <button
-          class="file-item"
-          class:selected={i === cursorIndex}
-          class:is-current={item.node.path === selectedPath}
-          data-index={i}
-          onclick={() => {
-            cursorIndex = i;
-            if (!item.node.is_dir) {
-              onSelect(item.node.path);
-              onClose();
-            } else {
-              if (expandedDirs.has(item.node.path)) {
-                expandedDirs.delete(item.node.path);
+    <div class="navigator-body">
+      <div class="file-list" bind:this={listElement}>
+        {#each flatItems as item, i}
+          <button
+            class="file-item"
+            class:selected={i === cursorIndex}
+            class:is-current={item.node.path === selectedPath}
+            data-index={i}
+            onclick={() => {
+              cursorIndex = i;
+              if (!item.node.is_dir) {
+                onSelect(item.node.path);
+                onClose();
               } else {
-                expandedDirs.add(item.node.path);
+                if (expandedDirs.has(item.node.path)) {
+                  expandedDirs.delete(item.node.path);
+                } else {
+                  expandedDirs.add(item.node.path);
+                }
+                expandedDirs = new Set(expandedDirs);
               }
-              expandedDirs = new Set(expandedDirs);
-            }
-          }}
-          onmouseenter={() => (cursorIndex = i)}
-          style="padding-left: {item.depth * 16 + 12}px"
-        >
-          {#if item.node.is_dir}
-            <span class="dir-icon" class:open={item.expanded}>
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                {#if item.expanded}
-                  <path d="M1.5 3h5l1 1.5H14.5v8.5h-13z" fill="#f9e2af" opacity="0.85"/>
-                  <path d="M1.5 6L3 13h10.5L14.5 6z" fill="#f9e2af"/>
-                {:else}
-                  <path d="M1.5 3h5l1 1.5H14.5v9h-13z" fill="#f9e2af" opacity="0.85"/>
-                {/if}
-              </svg>
-            </span>
-            <span class="name dir-name">{displayName(item.node.name, true)}</span>
-          {:else}
-            {@const fi = getFileIcon(item.node.name)}
-            <span class="file-badge" style="color: {fi.color}; border-color: {fi.color}">{fi.icon}</span>
-            <span class="name">{displayName(item.node.name, false)}</span>
-          {/if}
-        </button>
-      {/each}
-      {#if flatItems.length === 0}
-        <div class="empty">ファイルがありません</div>
-      {/if}
+            }}
+            onmouseenter={() => (cursorIndex = i)}
+            style="padding-left: {item.depth * 16 + 12}px"
+          >
+            {#if item.node.is_dir}
+              <span class="dir-icon" class:open={item.expanded}>
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                  {#if item.expanded}
+                    <path d="M1.5 3h5l1 1.5H14.5v8.5h-13z" fill="#f9e2af" opacity="0.85"/>
+                    <path d="M1.5 6L3 13h10.5L14.5 6z" fill="#f9e2af"/>
+                  {:else}
+                    <path d="M1.5 3h5l1 1.5H14.5v9h-13z" fill="#f9e2af" opacity="0.85"/>
+                  {/if}
+                </svg>
+              </span>
+              <span class="name dir-name">{displayName(item.node.name, true)}</span>
+            {:else}
+              {@const fi = getFileIcon(item.node.name)}
+              <span class="file-badge" style="color: {fi.color}; border-color: {fi.color}">{fi.icon}</span>
+              <span class="name">{displayName(item.node.name, false)}</span>
+            {/if}
+          </button>
+        {/each}
+        {#if flatItems.length === 0}
+          <div class="empty">ファイルがありません</div>
+        {/if}
+      </div>
+
+      <div class="preview-pane">
+        {#if previewLoading && !previewHtml}
+          <div class="preview-empty">読み込み中...</div>
+        {:else if previewHtml}
+          <div class="preview-content">
+            {@html previewHtml}
+          </div>
+        {:else}
+          <div class="preview-empty">ファイルを選択するとプレビューが表示されます</div>
+        {/if}
+      </div>
     </div>
 
     <div class="nav-footer">
@@ -336,8 +400,8 @@
   }
 
   .navigator {
-    width: 560px;
-    max-height: 640px;
+    width: 900px;
+    max-height: 720px;
     background: var(--bg-secondary);
     border: 1px solid var(--border);
     border-radius: 8px;
@@ -387,10 +451,16 @@
     outline: none;
   }
 
-  .file-list {
+  .navigator-body {
+    display: flex;
     flex: 1;
+    min-height: 0;
+  }
+
+  .file-list {
+    width: 320px;
+    flex-shrink: 0;
     overflow-y: auto;
-    max-height: 520px;
     padding: 4px 0;
   }
 
@@ -463,6 +533,112 @@
     text-align: center;
     color: var(--text-muted);
     font-size: 13px;
+  }
+
+  .preview-pane {
+    flex: 1;
+    border-left: 1px solid var(--border);
+    overflow-y: auto;
+    min-width: 0;
+  }
+
+  .preview-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--text-muted);
+    font-size: 13px;
+  }
+
+  .preview-content {
+    padding: 16px;
+    font-family: var(--font-sans);
+    line-height: 1.7;
+    font-size: 13px;
+    color: var(--text-primary);
+  }
+
+  .preview-content :global(h1) {
+    font-size: 1.6em;
+    margin-bottom: 0.5em;
+    padding-bottom: 0.3em;
+    border-bottom: 1px solid var(--border);
+  }
+  .preview-content :global(h2) {
+    font-size: 1.3em;
+    margin: 1em 0 0.5em;
+  }
+  .preview-content :global(h3) {
+    font-size: 1.1em;
+    margin: 0.8em 0 0.4em;
+  }
+  .preview-content :global(p) {
+    margin-bottom: 0.8em;
+  }
+  .preview-content :global(a.wikilink) {
+    color: var(--accent);
+    text-decoration: underline;
+    text-decoration-style: dotted;
+  }
+  .preview-content :global(.tag) {
+    color: var(--peach);
+    font-size: 0.9em;
+  }
+  .preview-content :global(code) {
+    background: var(--bg-tertiary);
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: var(--font-mono);
+    font-size: 0.9em;
+  }
+  .preview-content :global(pre) {
+    background: var(--bg-secondary);
+    padding: 12px;
+    border-radius: 6px;
+    overflow-x: auto;
+    margin-bottom: 1em;
+  }
+  .preview-content :global(pre code) {
+    background: none;
+    padding: 0;
+  }
+  .preview-content :global(blockquote) {
+    border-left: 3px solid var(--accent);
+    padding-left: 16px;
+    color: var(--text-secondary);
+    margin-bottom: 1em;
+  }
+  .preview-content :global(ul),
+  .preview-content :global(ol) {
+    padding-left: 24px;
+    margin-bottom: 1em;
+  }
+  .preview-content :global(li) {
+    margin-bottom: 0.3em;
+  }
+  .preview-content :global(table) {
+    border-collapse: collapse;
+    width: 100%;
+    margin-bottom: 1em;
+  }
+  .preview-content :global(th),
+  .preview-content :global(td) {
+    border: 1px solid var(--border);
+    padding: 6px 10px;
+    text-align: left;
+  }
+  .preview-content :global(th) {
+    background: var(--bg-tertiary);
+  }
+  .preview-content :global(input[type="checkbox"]) {
+    margin-right: 6px;
+  }
+  .preview-content :global(mark) {
+    background: rgba(249, 226, 175, 0.3);
+    color: var(--text-primary);
+    padding: 1px 3px;
+    border-radius: 2px;
   }
 
   .nav-footer {

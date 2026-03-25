@@ -222,6 +222,7 @@
       mode={editor.searchMode}
       files={vault.fileTree}
       selectedPath={vault.currentFile}
+      vaultPath={vault.meta?.path ?? ""}
       onSelect={handleSearchSelect}
       onClose={closeFuzzySearch}
     />
