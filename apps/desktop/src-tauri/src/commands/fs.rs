@@ -27,10 +27,33 @@ fn resolve_safe_path(vault_path: &str, requested: &str) -> Result<PathBuf, Strin
     let canonical = if resolved.exists() {
         fs::canonicalize(&resolved).map_err(|e| e.to_string())?
     } else {
-        // For new files, check parent
-        let parent = resolved.parent().ok_or("Invalid path")?;
-        let canonical_parent = fs::canonicalize(parent).map_err(|e| e.to_string())?;
-        canonical_parent.join(resolved.file_name().ok_or("Invalid filename")?)
+        // For new files, walk up to find the nearest existing ancestor and
+        // resolve the remaining components relative to it. This handles cases
+        // where multiple levels of parent directories don't exist yet (e.g.
+        // 00_daily/2026/04/2026-04-01.md when the "04" directory is new).
+        let mut ancestor = resolved.as_path();
+        let mut missing: Vec<&std::ffi::OsStr> = Vec::new();
+        loop {
+            if let Some(parent) = ancestor.parent() {
+                if parent.exists() {
+                    let canonical_ancestor =
+                        fs::canonicalize(parent).map_err(|e| e.to_string())?;
+                    let mut result = canonical_ancestor;
+                    for component in missing.iter().rev() {
+                        result = result.join(component);
+                    }
+                    break result;
+                }
+                missing.push(
+                    ancestor
+                        .file_name()
+                        .ok_or("Invalid path component")?,
+                );
+                ancestor = parent;
+            } else {
+                return Err("No existing ancestor directory found".to_string());
+            }
+        }
     };
 
     if !canonical.starts_with(&vault) {
