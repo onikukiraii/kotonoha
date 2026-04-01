@@ -14,8 +14,11 @@ interface PullResult {
 
 let gitStatus = $state<GitStatus | null>(null);
 let isLoading = $state(false);
+let isSyncing = false;
 let pollInterval: ReturnType<typeof setInterval> | null = null;
 let backupInterval: ReturnType<typeof setInterval> | null = null;
+let pullInterval: ReturnType<typeof setInterval> | null = null;
+let syncTimer: ReturnType<typeof setTimeout> | null = null;
 
 export function getGitState() {
   return {
@@ -80,6 +83,8 @@ export async function gitPull(vaultPath: string): Promise<PullResult> {
 }
 
 async function autoBackup(vaultPath: string): Promise<void> {
+  if (isSyncing) return;
+  isSyncing = true;
   try {
     const status = await invoke<GitStatus>("git_status", { vaultPath });
     const hasChanges =
@@ -88,6 +93,14 @@ async function autoBackup(vaultPath: string): Promise<void> {
       status.untracked.length > 0;
 
     if (!hasChanges) return;
+
+    // Pull first to incorporate remote changes before committing
+    // (works because uncommitted changes are in the working tree, not staged)
+    try {
+      await invoke("git_pull", { vaultPath });
+    } catch (err) {
+      console.warn("[git] auto-backup pull failed:", err);
+    }
 
     const now = new Date();
     const ts = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")} ${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}:${String(now.getSeconds()).padStart(2, "0")}`;
@@ -104,15 +117,43 @@ async function autoBackup(vaultPath: string): Promise<void> {
     await loadGitStatus(vaultPath);
   } catch {
     // auto-backup failure should not disrupt the app
+  } finally {
+    isSyncing = false;
   }
+}
+
+async function autoPull(vaultPath: string): Promise<void> {
+  if (isSyncing) return;
+  isSyncing = true;
+  try {
+    const result = await invoke<PullResult>("git_pull", { vaultPath });
+    if (result.updated) {
+      await loadGitStatus(vaultPath);
+    }
+  } catch {
+    // periodic pull failure should not disrupt the app
+  } finally {
+    isSyncing = false;
+  }
+}
+
+/** ファイル保存後に呼び出し、30秒デバウンスでcommit→pull→pushをトリガーする */
+export function notifyFileSaved(vaultPath: string): void {
+  if (syncTimer) clearTimeout(syncTimer);
+  syncTimer = setTimeout(() => {
+    autoBackup(vaultPath);
+  }, 30000);
 }
 
 export function startGitPolling(vaultPath: string): void {
   stopGitPolling();
   loadGitStatus(vaultPath);
-  // Status check every 30s, auto-backup every 5 minutes
+  // Status check every 30s
   pollInterval = setInterval(() => loadGitStatus(vaultPath), 30000);
+  // Auto-backup every 5 minutes (safety net)
   backupInterval = setInterval(() => autoBackup(vaultPath), 300000);
+  // Auto-pull every 60s to keep up with remote changes
+  pullInterval = setInterval(() => autoPull(vaultPath), 60000);
 }
 
 export function stopGitPolling(): void {
@@ -123,5 +164,13 @@ export function stopGitPolling(): void {
   if (backupInterval) {
     clearInterval(backupInterval);
     backupInterval = null;
+  }
+  if (pullInterval) {
+    clearInterval(pullInterval);
+    pullInterval = null;
+  }
+  if (syncTimer) {
+    clearTimeout(syncTimer);
+    syncTimer = null;
   }
 }

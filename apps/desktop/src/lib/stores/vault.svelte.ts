@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { FileNode, VaultMeta } from "@kotonoha/types";
+import { notifyFileSaved } from "./git.svelte";
 
 let vaultMeta = $state<VaultMeta | null>(null);
 let fileTree = $state<FileNode[]>([]);
@@ -108,6 +109,8 @@ export async function saveFile(
     content,
     vaultPath: vaultMeta.path,
   }).catch(() => {});
+  // Trigger debounced git sync after save
+  notifyFileSaved(vaultMeta.path);
   return mtime;
 }
 
