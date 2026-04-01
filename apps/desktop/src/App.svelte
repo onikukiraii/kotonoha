@@ -4,6 +4,7 @@
   import TabBar from "./lib/components/TabBar.svelte";
   import BacklinkPanel from "./lib/components/BacklinkPanel.svelte";
   import FuzzySearchModal from "./lib/components/FuzzySearchModal.svelte";
+  import CategoryPickerModal from "./lib/components/CategoryPickerModal.svelte";
   import GitPanel from "./lib/components/GitPanel.svelte";
   import StatusBar from "./lib/components/StatusBar.svelte";
   import VaultSelector from "./lib/components/VaultSelector.svelte";
@@ -12,8 +13,11 @@
     initVault,
     openVault,
     openDailyNote,
+    listSubdirs,
+    createLearningLog,
     reloadVault,
   } from "./lib/stores/vault.svelte";
+  import { LEARNING_LOGS_DIR } from "@kotonoha/ui/learning-log";
   import {
     getEditorState,
     toggleFuzzySearch,
@@ -39,6 +43,8 @@
 
   let initialized = $state(false);
   let hasVault = $state(false);
+  let showLearningPicker = $state(false);
+  let learningCategories = $state<string[]>([]);
 
   onMount(async () => {
     hasVault = await initVault();
@@ -119,6 +125,23 @@
     }
   }
 
+  async function handleOpenLearningLog() {
+    learningCategories = await listSubdirs(LEARNING_LOGS_DIR);
+    showLearningPicker = true;
+  }
+
+  async function handleLearningCategorySelect(category: string) {
+    showLearningPicker = false;
+    try {
+      const path = await createLearningLog(category);
+      if (path) {
+        await openTab(path);
+      }
+    } catch (e) {
+      console.error("[learning-log] failed:", e);
+    }
+  }
+
   function handleKeydown(e: KeyboardEvent) {
     const meta = e.metaKey || e.ctrlKey;
     if (meta && e.key === "o") {
@@ -139,6 +162,9 @@
     } else if (meta && e.key === "d") {
       e.preventDefault();
       handleOpenDailyNote();
+    } else if (meta && e.key === "l") {
+      e.preventDefault();
+      handleOpenLearningLog();
     } else if (meta && e.key === "w") {
       e.preventDefault();
       if (tabsState.activeTabId) {
@@ -225,6 +251,14 @@
       vaultPath={vault.meta?.path ?? ""}
       onSelect={handleSearchSelect}
       onClose={closeFuzzySearch}
+    />
+  {/if}
+
+  {#if showLearningPicker}
+    <CategoryPickerModal
+      categories={learningCategories}
+      onSelect={handleLearningCategorySelect}
+      onClose={() => (showLearningPicker = false)}
     />
   {/if}
 {/if}

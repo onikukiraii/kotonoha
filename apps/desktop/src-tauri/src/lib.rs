@@ -21,6 +21,7 @@ pub fn run() {
             fs::delete_file,
             fs::rename_file,
             fs::ensure_daily_note,
+            fs::list_subdirs,
             // parse
             parse::render_markdown,
             // index

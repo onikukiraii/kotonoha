@@ -159,3 +159,26 @@ export async function openDailyNote(): Promise<string | null> {
   if (created) await loadFiles();
   return path;
 }
+
+export async function listSubdirs(dirPath: string): Promise<string[]> {
+  if (!vaultMeta) return [];
+  return invoke<string[]>("list_subdirs", {
+    dirPath,
+    vaultPath: vaultMeta.path,
+  });
+}
+
+export async function createLearningLog(category: string): Promise<string | null> {
+  if (!vaultMeta) return null;
+  const LEARNING_LOGS_DIR = "05_learning_logs";
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  const hh = String(d.getHours()).padStart(2, "0");
+  const min = String(d.getMinutes()).padStart(2, "0");
+  const filePath = `${LEARNING_LOGS_DIR}/${category}/${yyyy}-${mm}-${dd}_${hh}${min}.md`;
+  await invoke("create_file", { path: filePath, vaultPath: vaultMeta.path });
+  await loadFiles();
+  return filePath;
+}

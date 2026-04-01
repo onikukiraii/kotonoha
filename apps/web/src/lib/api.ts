@@ -92,6 +92,21 @@ export async function openDailyNote(): Promise<{ path: string; created: boolean 
   return fetchApi('/api/files/daily', { method: 'POST' })
 }
 
+// Learning Logs
+export async function getSubdirs(dirPath: string): Promise<string[]> {
+  const { dirs } = await fetchApi<{ dirs: string[] }>(
+    `/api/files/subdirs?path=${encodeURIComponent(dirPath)}`,
+  )
+  return dirs
+}
+
+export async function createLearningLog(category: string): Promise<{ path: string }> {
+  const { getLearningLogPath } = await import('@kotonoha/ui/learning-log')
+  const path = getLearningLogPath(category)
+  await createNewFile(path, '')
+  return { path }
+}
+
 // Git
 export async function getGitStatus(): Promise<GitStatus> {
   return fetchApi('/api/git/status')

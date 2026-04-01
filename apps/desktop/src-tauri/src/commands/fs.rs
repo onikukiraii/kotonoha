@@ -35,6 +35,11 @@ fn resolve_safe_path(vault_path: &str, requested: &str) -> Result<PathBuf, Strin
         let mut missing: Vec<&std::ffi::OsStr> = Vec::new();
         loop {
             if let Some(parent) = ancestor.parent() {
+                missing.push(
+                    ancestor
+                        .file_name()
+                        .ok_or("Invalid path component")?,
+                );
                 if parent.exists() {
                     let canonical_ancestor =
                         fs::canonicalize(parent).map_err(|e| e.to_string())?;
@@ -44,11 +49,6 @@ fn resolve_safe_path(vault_path: &str, requested: &str) -> Result<PathBuf, Strin
                     }
                     break result;
                 }
-                missing.push(
-                    ancestor
-                        .file_name()
-                        .ok_or("Invalid path component")?,
-                );
                 ancestor = parent;
             } else {
                 return Err("No existing ancestor directory found".to_string());
@@ -287,4 +287,24 @@ pub fn ensure_daily_note(vault_path: String) -> Result<DailyNoteResult, String> 
         path,
         created: true,
     })
+}
+
+#[tauri::command]
+pub fn list_subdirs(dir_path: String, vault_path: String) -> Result<Vec<String>, String> {
+    let abs_path = resolve_safe_path(&vault_path, &dir_path)?;
+    if !abs_path.exists() {
+        return Ok(Vec::new());
+    }
+    let mut dirs = Vec::new();
+    for entry in fs::read_dir(&abs_path).map_err(|e| e.to_string())? {
+        let entry = entry.map_err(|e| e.to_string())?;
+        if entry.file_type().map_err(|e| e.to_string())?.is_dir() {
+            let name = entry.file_name().to_string_lossy().to_string();
+            if !name.starts_with('.') {
+                dirs.push(name);
+            }
+        }
+    }
+    dirs.sort();
+    Ok(dirs)
 }

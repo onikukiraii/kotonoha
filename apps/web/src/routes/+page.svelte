@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { FileTree, FuzzySearch, BacklinkPanel } from '@kotonoha/ui'
+  import { FileTree, FuzzySearch, BacklinkPanel, CategoryPicker } from '@kotonoha/ui'
   import type { FileNode, SearchResult } from '@kotonoha/types'
   import {
     fileTree,
@@ -11,7 +11,8 @@
     openFile,
   } from '$lib/stores/vault.js'
   import { isDirty, scheduleSave } from '$lib/stores/editor.js'
-  import { searchFiles, searchFullText, openDailyNote } from '$lib/api.js'
+  import { searchFiles, searchFullText, openDailyNote, getSubdirs, createLearningLog } from '$lib/api.js'
+  import { LEARNING_LOGS_DIR } from '@kotonoha/ui/learning-log'
 
   // Mobile: 2 tabs (files / note), note has editor/preview toggle
   type MobileTab = 'files' | 'note'
@@ -20,6 +21,8 @@
   let mobileTab = $state<MobileTab>('files')
   let noteMode = $state<NoteMode>('editor')
   let showSearch = $state(false)
+  let showCategoryPicker = $state(false)
+  let learningCategories = $state<string[]>([])
   let searchResults = $state<SearchResult[]>([])
   let renderedHtml = $state('')
   let editorContent = $state('')
@@ -208,6 +211,22 @@
     mobileTab = 'note'
     noteMode = 'editor'
   }
+
+  async function handleOpenLearningLog() {
+    learningCategories = await getSubdirs(LEARNING_LOGS_DIR)
+    showCategoryPicker = true
+  }
+
+  async function handleCategorySelect(category: string) {
+    showCategoryPicker = false
+    const { path } = await createLearningLog(category)
+    await loadFileTree()
+    await openFile(path)
+    editorContent = $currentFileContent
+    renderedHtml = renderMarkdownClient(editorContent)
+    mobileTab = 'note'
+    noteMode = 'editor'
+  }
 </script>
 
 <svelte:window
@@ -218,6 +237,14 @@
     }
   }}
 />
+
+{#if showCategoryPicker}
+  <CategoryPicker
+    categories={learningCategories}
+    onSelect={handleCategorySelect}
+    onClose={() => (showCategoryPicker = false)}
+  />
+{/if}
 
 {#if showSearch}
   <FuzzySearch
@@ -344,6 +371,12 @@
       <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
     </svg>
     <span class="nav-label">Today</span>
+  </button>
+  <button class="nav-btn" onclick={handleOpenLearningLog}>
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/>
+    </svg>
+    <span class="nav-label">学習</span>
   </button>
   <button class="nav-btn" class:active={mobileTab === 'note'} onclick={() => (mobileTab = 'note')}>
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
