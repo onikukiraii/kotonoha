@@ -61,6 +61,69 @@ class BulletWidget extends WidgetType {
   }
 }
 
+// --- Mermaid rendering ---
+
+const mermaidCache = new Map<string, string>()
+let mermaidInitialized = false
+
+async function renderMermaid(source: string): Promise<string | null> {
+  try {
+    const mermaid = (await import('mermaid')).default
+    if (!mermaidInitialized) {
+      mermaid.initialize({ startOnLoad: false, theme: 'dark' })
+      mermaidInitialized = true
+    }
+    const id = `mermaid-lp-${crypto.randomUUID()}`
+    const { svg } = await mermaid.render(id, source)
+    return svg
+  } catch {
+    return null
+  }
+}
+
+class MermaidWidget extends WidgetType {
+  constructor(
+    readonly source: string,
+    readonly viewRef: { current: EditorView | null },
+  ) {
+    super()
+  }
+
+  toDOM(): HTMLElement {
+    const container = document.createElement('div')
+    container.className = 'cm-lp-mermaid'
+
+    const cached = mermaidCache.get(this.source)
+    if (cached) {
+      container.innerHTML = cached
+      return container
+    }
+
+    container.textContent = 'Rendering diagram...'
+    container.classList.add('cm-lp-mermaid-loading')
+
+    renderMermaid(this.source).then((svg) => {
+      if (svg) {
+        mermaidCache.set(this.source, svg)
+        // Update DOM directly instead of re-dispatching
+        container.classList.remove('cm-lp-mermaid-loading')
+        container.textContent = ''
+        container.innerHTML = svg
+      }
+    })
+
+    return container
+  }
+
+  eq(other: MermaidWidget): boolean {
+    return this.source === other.source
+  }
+
+  ignoreEvent(): boolean {
+    return true
+  }
+}
+
 class HorizontalRuleWidget extends WidgetType {
   toDOM(): HTMLElement {
     const hr = document.createElement('hr')
@@ -104,7 +167,11 @@ interface DecoEntry {
 
 // --- Core ViewPlugin ---
 
-function buildDecorations(view: EditorView, options: LivePreviewOptions): DecorationSet {
+function buildDecorations(
+  view: EditorView,
+  options: LivePreviewOptions,
+  viewRef: { current: EditorView | null } = { current: null },
+): DecorationSet {
   const state = view.state
   const cursorLines = getCursorLines(state)
   const entries: DecoEntry[] = []
@@ -245,22 +312,63 @@ function buildDecorations(view: EditorView, options: LivePreviewOptions): Decora
 
         // --- FencedCode ---
         if (type === 'FencedCode') {
+          // Detect language from CodeInfo child
+          let language = ''
+          {
+            const n = node.node
+            let c = n.cursor()
+            if (c.firstChild()) {
+              do {
+                if (c.type.name === 'CodeInfo') {
+                  language = state.doc.sliceString(c.from, c.to).trim().toLowerCase()
+                }
+              } while (c.nextSibling())
+            }
+          }
+
+          // Mermaid block: hide all lines and insert SVG widget when cursor is outside
+          if (language === 'mermaid' && !onCursor) {
+            const fullText = state.doc.sliceString(node.from, node.to)
+            const lines = fullText.split('\n')
+            const mermaidSource = lines.slice(1, -1).join('\n').trim()
+            if (mermaidSource) {
+              // Hide each line individually (ViewPlugin cannot replace across line breaks)
+              const startLine = state.doc.lineAt(node.from)
+              const endLine = state.doc.lineAt(node.to)
+              for (let ln = startLine.number; ln <= endLine.number; ln++) {
+                const line = state.doc.line(ln)
+                entries.push({
+                  from: line.from,
+                  to: line.to,
+                  deco: Decoration.replace({}),
+                })
+              }
+              // Insert widget at the start of the first line
+              entries.push({
+                from: node.from,
+                to: node.from,
+                deco: Decoration.widget({
+                  widget: new MermaidWidget(mermaidSource, viewRef),
+                  side: 1,
+                }),
+              })
+              return false
+            }
+          }
+
+          // Non-mermaid (or cursor on mermaid): hide ``` marks, apply codeblock style
           if (!onCursor) {
             const n = node.node
             let c = n.cursor()
             if (c.firstChild()) {
               do {
                 if (c.type.name === 'CodeMark') {
-                  // Hide opening/closing ``` lines (stay within the line, don't cross newline)
                   const line = state.doc.lineAt(c.from)
                   entries.push({
                     from: line.from,
                     to: line.to,
                     deco: Decoration.replace({}),
                   })
-                } else if (c.type.name === 'CodeInfo') {
-                  // Also hide the info line (it's on the same line as the opening ```)
-                  // Already handled by CodeMark line replacement
                 }
               } while (c.nextSibling())
             }
@@ -568,6 +676,22 @@ const livePreviewTheme = EditorView.theme(
       display: 'inline-block',
       color: 'var(--accent, #89b4fa)',
     },
+    '.cm-lp-mermaid': {
+      display: 'flex',
+      justifyContent: 'center',
+      margin: '0.5em 0',
+      overflowX: 'auto',
+    },
+    '.cm-lp-mermaid svg': {
+      maxWidth: '100%',
+      height: 'auto',
+    },
+    '.cm-lp-mermaid-loading': {
+      padding: '1em',
+      color: 'var(--text-muted, #6c7086)',
+      fontStyle: 'italic',
+      textAlign: 'center',
+    },
   },
   { dark: true },
 )
@@ -624,18 +748,21 @@ export function livePreview(options: LivePreviewOptions = {}): Extension[] {
   const plugin = ViewPlugin.fromClass(
     class {
       decorations: DecorationSet
+      viewRef: { current: EditorView | null } = { current: null }
 
       constructor(view: EditorView) {
-        this.decorations = buildDecorations(view, options)
+        this.viewRef.current = view
+        this.decorations = buildDecorations(view, options, this.viewRef)
       }
 
       update(update: ViewUpdate) {
+        this.viewRef.current = update.view
         if (
           update.docChanged ||
           update.viewportChanged ||
           update.selectionSet
         ) {
-          this.decorations = buildDecorations(update.view, options)
+          this.decorations = buildDecorations(update.view, options, this.viewRef)
         }
       }
     },
