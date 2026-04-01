@@ -6,6 +6,7 @@
   import FuzzySearchModal from "./lib/components/FuzzySearchModal.svelte";
   import CategoryPickerModal from "./lib/components/CategoryPickerModal.svelte";
   import GitPanel from "./lib/components/GitPanel.svelte";
+  import TreeSidebar from "./lib/components/TreeSidebar.svelte";
   import StatusBar from "./lib/components/StatusBar.svelte";
   import VaultSelector from "./lib/components/VaultSelector.svelte";
   import {
@@ -25,6 +26,8 @@
     toggleBacklinks,
     toggleGitPanel,
     toggleLivePreview,
+    toggleTreeSidebar,
+    blurTreeSidebar,
   } from "./lib/stores/editor.svelte";
   import {
     getTabsState,
@@ -176,6 +179,9 @@
     } else if (meta && e.key === "[") {
       e.preventDefault();
       activatePrevTab();
+    } else if (meta && e.key === "t") {
+      e.preventDefault();
+      toggleTreeSidebar();
     } else if (meta && e.key === "r") {
       e.preventDefault();
       reloadVault();
@@ -193,6 +199,18 @@
   <VaultSelector onOpen={handleOpenVault} />
 {:else}
   <div class="app-layout">
+    {#if editor.treeSidebarFocused}
+      <div class="tree-sidebar-area">
+        <TreeSidebar
+          files={vault.fileTree}
+          selectedPath={vault.currentFile}
+          vaultPath={vault.meta?.path ?? ""}
+          focused={editor.treeSidebarFocused}
+          onSelect={handleFileSelect}
+          onBlur={blurTreeSidebar}
+        />
+      </div>
+    {/if}
     <div class="main-area">
       {#if tabsState.tabs.length > 0}
         <TabBar
@@ -230,7 +248,7 @@
         <div class="empty-state">
           <p>ファイルを選択してください</p>
           <p class="hint">
-            <kbd>⌘O</kbd> ファイル検索 &nbsp; <kbd>⌘D</kbd> Today &nbsp; <kbd>⌘R</kbd> リロード &nbsp; <kbd>⌘[</kbd><kbd>⌘]</kbd> タブ移動 &nbsp; <kbd>⌘W</kbd> タブを閉じる
+            <kbd>⌘O</kbd> ファイル検索 &nbsp; <kbd>⌘T</kbd> ツリー &nbsp; <kbd>⌘D</kbd> Today &nbsp; <kbd>⌘L</kbd> 学習ログ &nbsp; <kbd>⌘R</kbd> リロード &nbsp; <kbd>⌘[</kbd><kbd>⌘]</kbd> タブ移動 &nbsp; <kbd>⌘W</kbd> タブを閉じる
           </p>
         </div>
       {/if}
@@ -275,6 +293,13 @@
   .app-layout {
     display: flex;
     height: calc(100% - var(--statusbar-height));
+    overflow: hidden;
+  }
+
+  .tree-sidebar-area {
+    width: 220px;
+    flex-shrink: 0;
+    border-right: 1px solid var(--border);
     overflow: hidden;
   }
 

@@ -2,6 +2,7 @@ let isDirty = $state(false);
 let showFuzzySearch = $state(false);
 let showBacklinks = $state(false);
 let showGitPanel = $state(false);
+let treeSidebarFocused = $state(false);
 let livePreviewEnabled = $state(true);
 let searchMode = $state<"filename" | "fulltext" | "tree">("filename");
 let vimMode = $state("NORMAL");
@@ -22,6 +23,9 @@ export function getEditorState() {
     },
     get showGitPanel() {
       return showGitPanel;
+    },
+    get treeSidebarFocused() {
+      return treeSidebarFocused;
     },
     get livePreviewEnabled() {
       return livePreviewEnabled;
@@ -60,4 +64,12 @@ export function toggleBacklinks() {
 
 export function toggleGitPanel() {
   showGitPanel = !showGitPanel;
+}
+
+export function toggleTreeSidebar() {
+  treeSidebarFocused = !treeSidebarFocused;
+}
+
+export function blurTreeSidebar() {
+  treeSidebarFocused = false;
 }
