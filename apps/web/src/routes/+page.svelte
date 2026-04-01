@@ -253,12 +253,6 @@
             </svg>
             検索
           </button>
-          <button class="daily-btn" onclick={handleOpenDaily}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
-            </svg>
-            Today
-          </button>
         </div>
         <FileTree
           nodes={$fileTree}
@@ -345,6 +339,12 @@
       <span class="nav-dot"></span>
     {/if}
   </button>
+  <button class="nav-btn" onclick={handleOpenDaily}>
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+    </svg>
+    <span class="nav-label">Today</span>
+  </button>
   <button class="nav-btn" class:active={mobileTab === 'note'} onclick={() => (mobileTab = 'note')}>
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
       <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
@@ -372,11 +372,11 @@
     border-bottom: 1px solid var(--koto-border);
   }
 
-  .search-btn,
-  .daily-btn {
+  .search-btn {
     display: flex;
     align-items: center;
     gap: 6px;
+    flex: 1;
     min-height: var(--koto-touch-min);
     padding: var(--koto-space-2) var(--koto-space-3);
     background: var(--koto-bg-elevated);
@@ -388,12 +388,7 @@
     transition: background var(--koto-transition-fast), color var(--koto-transition-fast);
   }
 
-  .search-btn {
-    flex: 1;
-  }
-
-  .search-btn:hover,
-  .daily-btn:hover {
+  .search-btn:hover {
     background: var(--koto-bg-hover);
     color: var(--koto-text-secondary);
   }
