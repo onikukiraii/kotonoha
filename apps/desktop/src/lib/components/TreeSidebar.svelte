@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { FileNode } from "@kotonoha/types";
   import { tick } from "svelte";
-  import { createNewFile } from "../stores/vault.svelte";
+  import { createNewFile, deleteCurrentFile, renameCurrentFile } from "../stores/vault.svelte";
 
   interface Props {
     files: FileNode[];
@@ -27,6 +27,22 @@
   let inputElement: HTMLInputElement;
   let sidebarElement: HTMLDivElement;
   let listElement: HTMLDivElement;
+
+  // Drag & drop
+  let dragSource = $state<string | null>(null);
+  let dragTarget = $state<string | null>(null);
+
+  // Context menu
+  let contextMenu = $state<{ x: number; y: number; node: FileNode; confirming?: boolean } | null>(null);
+
+  function closeContextMenu() {
+    contextMenu = null;
+  }
+
+  async function handleDeleteFile(path: string) {
+    await deleteCurrentFile(path);
+    closeContextMenu();
+  }
 
   const fileIcons: Record<string, { icon: string; color: string }> = {
     md: { icon: "M", color: "#89b4fa" },
@@ -241,19 +257,65 @@
     </div>
   {/if}
 
-  <div class="file-list" bind:this={listElement}>
+  <div
+    class="file-list"
+    bind:this={listElement}
+    ondragover={(e) => { if (dragSource) e.preventDefault(); }}
+    ondrop={async (e) => {
+      e.preventDefault();
+      if (dragSource) {
+        const fileName = dragSource.split("/").pop();
+        if (fileName && fileName !== dragSource) {
+          await renameCurrentFile(dragSource, fileName);
+        }
+      }
+      dragSource = null;
+      dragTarget = null;
+    }}
+  >
     {#each flatItems as item, i}
       <button
         class="file-item"
         class:selected={focused && i === cursorIndex}
         class:is-current={item.node.path === selectedPath}
+        class:drop-target={dragTarget === item.node.path}
         data-index={i}
         onclick={() => {
+          closeContextMenu();
           if (item.node.is_dir) {
             toggleDir(item.node.path);
           } else {
             onSelect(item.node.path);
           }
+        }}
+        oncontextmenu={(e) => {
+          e.preventDefault();
+          contextMenu = { x: e.clientX, y: e.clientY, node: item.node };
+        }}
+        draggable={!item.node.is_dir}
+        ondragstart={(e) => {
+          e.dataTransfer?.setData("text/plain", item.node.path);
+          dragSource = item.node.path;
+        }}
+        ondragend={() => { dragSource = null; dragTarget = null; }}
+        ondragover={(e) => {
+          if (dragSource && item.node.is_dir && item.node.path !== dragSource) {
+            e.preventDefault();
+            dragTarget = item.node.path;
+          }
+        }}
+        ondragleave={() => { if (dragTarget === item.node.path) dragTarget = null; }}
+        ondrop={async (e) => {
+          e.preventDefault();
+          if (dragSource && item.node.is_dir) {
+            const fileName = dragSource.split("/").pop();
+            const newPath = `${item.node.path}/${fileName}`;
+            if (newPath !== dragSource) {
+              await renameCurrentFile(dragSource, newPath);
+            }
+          }
+          dragSource = null;
+          dragTarget = null;
         }}
         style="padding-left: {item.depth * 14 + 8}px"
       >
@@ -288,10 +350,34 @@
 
   {#if focused}
     <div class="nav-footer">
-      <kbd>j/k</kbd> 移動 <kbd>h/l</kbd> 開閉 <kbd>Enter</kbd> 開く <kbd>o</kbd> 新規 <kbd>Esc</kbd> 戻る
+      <kbd>j/k</kbd> 移動 <kbd>h/l</kbd> 開閉 <kbd>Enter</kbd> 開く <kbd>o</kbd> 新規 <kbd>右クリック</kbd> メニュー <kbd>Esc</kbd> 戻る
     </div>
   {/if}
 </div>
+
+{#if contextMenu}
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div class="context-overlay" onclick={closeContextMenu} oncontextmenu={(e) => { e.preventDefault(); closeContextMenu(); }}>
+    <div
+      class="context-menu"
+      style="left: {contextMenu.x}px; top: {contextMenu.y}px"
+      onclick={(e) => e.stopPropagation()}
+    >
+      {#if contextMenu.confirming}
+        <div class="confirm-msg">「{contextMenu.node.name}」を削除？</div>
+        <div class="confirm-actions">
+          <button class="danger" onclick={() => handleDeleteFile(contextMenu!.node.path)}>削除</button>
+          <button onclick={closeContextMenu}>キャンセル</button>
+        </div>
+      {:else}
+        <button
+          class="danger"
+          onclick={() => { contextMenu = { ...contextMenu!, confirming: true }; }}
+        >削除</button>
+      {/if}
+    </div>
+  </div>
+{/if}
 
 <style>
   .tree-sidebar {
@@ -476,5 +562,70 @@
     border-radius: 2px;
     font-family: var(--font-mono);
     font-size: 9px;
+  }
+
+  /* Drop target highlight */
+  .file-item.drop-target {
+    background: rgba(137, 180, 250, 0.15);
+    outline: 1px dashed var(--accent);
+  }
+
+  /* Context menu */
+  .context-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 99;
+  }
+
+  .context-menu {
+    position: fixed;
+    z-index: 100;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 4px 0;
+    min-width: 140px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  }
+
+  .context-menu button {
+    width: 100%;
+    padding: 6px 12px;
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 12px;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .context-menu button:hover {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+  }
+
+  .context-menu .danger:hover {
+    background: rgba(243, 139, 168, 0.15);
+    color: #f38ba8;
+  }
+
+  .confirm-msg {
+    padding: 6px 12px;
+    font-size: 11px;
+    color: var(--text-secondary);
+  }
+
+  .confirm-actions {
+    display: flex;
+    gap: 4px;
+    padding: 4px 8px;
+  }
+
+  .confirm-actions button {
+    flex: 1;
+    padding: 4px 8px;
+    border-radius: 3px;
+    font-size: 11px;
+    text-align: center;
   }
 </style>
