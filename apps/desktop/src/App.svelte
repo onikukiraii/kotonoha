@@ -49,13 +49,15 @@
   let showLearningPicker = $state(false);
   let learningCategories = $state<string[]>([]);
 
-  onMount(async () => {
-    hasVault = await initVault();
-    if (hasVault && vault.meta) {
-      startGitPolling(vault.meta.path);
-      await startWatcher(vault.meta.path);
-    }
-    initialized = true;
+  onMount(() => {
+    (async () => {
+      hasVault = await initVault();
+      if (hasVault && vault.meta) {
+        startGitPolling(vault.meta.path);
+        await startWatcher(vault.meta.path);
+      }
+      initialized = true;
+    })();
 
     return () => {
       stopGitPolling();
