@@ -7,6 +7,7 @@ export const gitLoading = writable(false)
 export const gitError = writable<string | null>(null)
 
 let pollTimer: ReturnType<typeof setInterval> | null = null
+let backupTimer: ReturnType<typeof setInterval> | null = null
 
 export async function loadGitStatus(): Promise<void> {
   try {
@@ -41,17 +42,42 @@ export async function commitAndPush(message?: string): Promise<void> {
   }
 }
 
+/** 未pushの変更があればcommit+pushする（safety net） */
+async function autoBackup(): Promise<void> {
+  try {
+    const status = await getGitStatus()
+    const hasChanges =
+      status.staged.length > 0 ||
+      status.unstaged.length > 0 ||
+      status.untracked.length > 0
+    if (!hasChanges) return
+
+    await gitCommitPush()
+    await loadGitStatus()
+  } catch {
+    // auto-backup failure should not disrupt the app
+  }
+}
+
 export function startStatusPolling(intervalMs = 30000): void {
   stopStatusPolling()
   void loadGitStatus()
   pollTimer = setInterval(() => {
     void loadGitStatus()
   }, intervalMs)
+  // Auto-backup every 5 minutes (safety net for external changes)
+  backupTimer = setInterval(() => {
+    void autoBackup()
+  }, 300000)
 }
 
 export function stopStatusPolling(): void {
   if (pollTimer) {
     clearInterval(pollTimer)
     pollTimer = null
+  }
+  if (backupTimer) {
+    clearInterval(backupTimer)
+    backupTimer = null
   }
 }

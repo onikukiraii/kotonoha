@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { reloadVault, getVaultState, loadFiles } from "./vault.svelte";
 import { getTabsState } from "./tabs.svelte";
+import { notifyFileSaved } from "./git.svelte";
 
 interface FsChangeEvent {
   paths: string[];
@@ -61,5 +62,7 @@ async function performReload(changedPaths: string[]) {
     invoke("build_differential_index", { vaultPath: vault.meta.path }).catch(
       () => {},
     );
+    // 外部変更（Claude Code等）もauto-backup対象にする
+    notifyFileSaved(vault.meta.path);
   }
 }
