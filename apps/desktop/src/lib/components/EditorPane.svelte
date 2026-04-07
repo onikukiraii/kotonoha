@@ -167,6 +167,10 @@
 
     setEditorViewRef(view);
     view.focus();
+    // Ensure CodeMirror measures its container after layout settles
+    requestAnimationFrame(() => {
+      view?.requestMeasure();
+    });
   }
 
   function scheduleSave(newContent: string) {
