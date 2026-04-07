@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { FileNode } from "@kotonoha/types";
-  import { tick } from "svelte";
+  import { tick, untrack } from "svelte";
   import { createNewFile, deleteCurrentFile, renameCurrentFile } from "../stores/vault.svelte";
 
   interface Props {
@@ -73,22 +73,35 @@
     if (selectedPath) {
       const parts = selectedPath.split("/");
       let current = "";
+      const dirsToExpand: string[] = [];
       for (let i = 0; i < parts.length - 1; i++) {
         current = current ? `${current}/${parts[i]}` : parts[i];
-        expandedDirs.add(current);
+        dirsToExpand.push(current);
       }
-      expandedDirs = new Set(expandedDirs);
+      // Use untrack to avoid tracking expandedDirs reads (prevents infinite loop)
+      untrack(() => {
+        let changed = false;
+        for (const dir of dirsToExpand) {
+          if (!expandedDirs.has(dir)) {
+            expandedDirs.add(dir);
+            changed = true;
+          }
+        }
+        if (changed) {
+          expandedDirs = new Set(expandedDirs);
+        }
+      });
     }
   });
 
   // Focus management: when focused prop becomes true, focus the sidebar
   $effect(() => {
     if (focused && sidebarElement) {
-      // Wait for DOM update (directories expanded by the other effect) before finding cursor position
+      const path = selectedPath;
       tick().then(() => {
         sidebarElement.focus();
-        if (selectedPath && flatItems.length > 0) {
-          const idx = flatItems.findIndex((item) => item.node.path === selectedPath);
+        if (path && flatItems.length > 0) {
+          const idx = flatItems.findIndex((item) => item.node.path === path);
           if (idx >= 0) {
             cursorIndex = idx;
             tick().then(() => scrollIntoView());
