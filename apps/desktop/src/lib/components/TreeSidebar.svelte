@@ -84,12 +84,17 @@
   // Focus management: when focused prop becomes true, focus the sidebar
   $effect(() => {
     if (focused && sidebarElement) {
-      tick().then(() => sidebarElement.focus());
-      // Move cursor to current file
-      if (selectedPath && flatItems.length > 0) {
-        const idx = flatItems.findIndex((item) => item.node.path === selectedPath);
-        if (idx >= 0) cursorIndex = idx;
-      }
+      // Wait for DOM update (directories expanded by the other effect) before finding cursor position
+      tick().then(() => {
+        sidebarElement.focus();
+        if (selectedPath && flatItems.length > 0) {
+          const idx = flatItems.findIndex((item) => item.node.path === selectedPath);
+          if (idx >= 0) {
+            cursorIndex = idx;
+            tick().then(() => scrollIntoView());
+          }
+        }
+      });
     }
   });
 
