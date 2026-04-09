@@ -6,6 +6,7 @@ let vaultMeta = $state<VaultMeta | null>(null);
 let fileTree = $state<FileNode[]>([]);
 let currentFile = $state<string | null>(null);
 let fileContent = $state("");
+let fileContentVersion = $state(0);
 
 export function getVaultState() {
   return {
@@ -20,6 +21,9 @@ export function getVaultState() {
     },
     get fileContent() {
       return fileContent;
+    },
+    get fileContentVersion() {
+      return fileContentVersion;
     },
   };
 }
@@ -74,10 +78,12 @@ export async function reloadVault(): Promise<void> {
         vaultPath: vaultMeta.path,
       });
       fileContent = content;
+      fileContentVersion++;
     } catch {
       // File may have been deleted externally
       currentFile = null;
       fileContent = "";
+      fileContentVersion++;
     }
   }
 }

@@ -229,6 +229,7 @@
             {#key vault.currentFile}
               <EditorPane
                 content={vault.fileContent}
+                contentVersion={vault.fileContentVersion}
                 filePath={vault.currentFile}
                 vaultPath={vault.meta?.path ?? ""}
                 onCursorLineChange={() => {}}

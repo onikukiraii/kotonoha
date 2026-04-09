@@ -8,13 +8,14 @@
 
   interface Props {
     content: string;
+    contentVersion?: number;
     filePath: string;
     vaultPath: string;
     onCursorLineChange?: (line: number) => void;
     onWikilinkNavigate?: (target: string) => void;
   }
 
-  let { content, filePath, vaultPath, onCursorLineChange = () => {}, onWikilinkNavigate = () => {} }: Props = $props();
+  let { content, contentVersion = 0, filePath, vaultPath, onCursorLineChange = () => {}, onWikilinkNavigate = () => {} }: Props = $props();
 
   const editor = getEditorState();
   const tabsState = getTabsState();
@@ -194,10 +195,11 @@
     }
   });
 
-  // Update editor content when navigating to a different file
+  // Update editor content when navigating to a different file or reloading
   // (safety net in case {#key} doesn't trigger component recreation)
   $effect(() => {
     const _fp = filePath;
+    const _cv = contentVersion;
     if (view) {
       const newContent = untrack(() => content);
       if (view.state.doc.toString() !== newContent) {
