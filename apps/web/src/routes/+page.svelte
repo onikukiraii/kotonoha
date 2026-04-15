@@ -11,7 +11,7 @@
     openFile,
   } from '$lib/stores/vault.js'
   import { isDirty, scheduleSave } from '$lib/stores/editor.js'
-  import { searchFiles, searchFullText, openDailyNote, getSubdirs, createLearningLog } from '$lib/api.js'
+  import { searchFiles, searchFullText, openDailyNote, getSubdirs, createLearningLog, createNewFile, deleteFileApi, renameFileApi } from '$lib/api.js'
   import { LEARNING_LOGS_DIR } from '@kotonoha/ui/learning-log'
 
   // Mobile: 2 tabs (files / note), note has editor/preview toggle
@@ -27,6 +27,20 @@
   let renderedHtml = $state('')
   let editorContent = $state('')
   let cursorLine = $state(0)
+
+  // File creation
+  let creating = $state(false)
+  let newFileName = $state('')
+  let createInputEl: HTMLInputElement | undefined = $state()
+
+  // File action menu & delete confirmation
+  let showFileActions = $state(false)
+  let showDeleteConfirm = $state(false)
+
+  // Rename
+  let renaming = $state(false)
+  let renameValue = $state('')
+  let renameInputEl: HTMLInputElement | undefined = $state()
 
   // Swipe gesture state (files <-> note)
   let touchStartX = $state(0)
@@ -167,16 +181,16 @@
     }
   }
 
-  function handleSearchSelect(result: SearchResult) {
+  async function handleSearchSelect(result: SearchResult) {
     showSearch = false
-    openFile(result.path)
+    await openFile(result.path)
     editorContent = $currentFileContent
     renderedHtml = renderMarkdownClient(editorContent)
     mobileTab = 'note'
     noteMode = 'editor'
   }
 
-  function handleWikilinkClick(target: string) {
+  async function handleWikilinkClick(target: string) {
     function findFile(nodes: FileNode[], name: string): FileNode | null {
       for (const node of nodes) {
         if (!node.is_dir && (node.name === name || node.name === `${name}.md`)) {
@@ -192,12 +206,16 @@
 
     const file = findFile($fileTree, target)
     if (file) {
-      openFile(file.path)
+      await openFile(file.path)
+      editorContent = $currentFileContent
+      renderedHtml = renderMarkdownClient(editorContent)
     }
   }
 
-  function handleBacklinkSelect(sourcePath: string) {
-    openFile(sourcePath)
+  async function handleBacklinkSelect(sourcePath: string) {
+    await openFile(sourcePath)
+    editorContent = $currentFileContent
+    renderedHtml = renderMarkdownClient(editorContent)
     mobileTab = 'note'
     noteMode = 'editor'
   }
@@ -215,6 +233,110 @@
   async function handleOpenLearningLog() {
     learningCategories = await getSubdirs(LEARNING_LOGS_DIR)
     showCategoryPicker = true
+  }
+
+  // --- File Creation ---
+  function startCreate() {
+    creating = true
+    newFileName = ''
+    requestAnimationFrame(() => createInputEl?.focus())
+  }
+
+  async function handleCreateSubmit() {
+    const name = newFileName.trim()
+    if (!name) {
+      creating = false
+      return
+    }
+    const path = name.endsWith('.md') ? name : `${name}.md`
+    try {
+      await createNewFile(path)
+      await loadFileTree()
+      await openFile(path)
+      editorContent = $currentFileContent
+      renderedHtml = renderMarkdownClient(editorContent)
+      mobileTab = 'note'
+      noteMode = 'editor'
+    } catch (err) {
+      console.error('Create failed:', err)
+    }
+    creating = false
+    newFileName = ''
+  }
+
+  function handleCreateKeydown(e: KeyboardEvent) {
+    if (e.key === 'Escape') {
+      creating = false
+    } else if (e.key === 'Enter') {
+      handleCreateSubmit()
+    }
+  }
+
+  // --- File Deletion ---
+  async function handleDeleteFile() {
+    const path = $currentFilePath
+    if (!path) return
+    try {
+      await deleteFileApi(path)
+      currentFilePath.set(null)
+      currentFileContent.set('')
+      editorContent = ''
+      renderedHtml = ''
+      await loadFileTree()
+      mobileTab = 'files'
+    } catch (err) {
+      console.error('Delete failed:', err)
+    }
+    showDeleteConfirm = false
+    showFileActions = false
+  }
+
+  // --- File Rename ---
+  function startRename() {
+    showFileActions = false
+    renaming = true
+    const filename = $currentFilePath?.split('/').pop() ?? ''
+    renameValue = filename.replace(/\.md$/, '')
+    requestAnimationFrame(() => {
+      renameInputEl?.focus()
+      renameInputEl?.select()
+    })
+  }
+
+  async function handleRenameSubmit() {
+    const oldPath = $currentFilePath
+    if (!oldPath || !renameValue.trim()) {
+      renaming = false
+      return
+    }
+    const newName = renameValue.trim().endsWith('.md') ? renameValue.trim() : `${renameValue.trim()}.md`
+    const parts = oldPath.split('/')
+    parts[parts.length - 1] = newName
+    const newPath = parts.join('/')
+
+    if (newPath === oldPath) {
+      renaming = false
+      return
+    }
+
+    try {
+      await renameFileApi(oldPath, newPath)
+      await loadFileTree()
+      await openFile(newPath)
+      editorContent = $currentFileContent
+      renderedHtml = renderMarkdownClient(editorContent)
+    } catch (err) {
+      console.error('Rename failed:', err)
+    }
+    renaming = false
+  }
+
+  function handleRenameKeydown(e: KeyboardEvent) {
+    if (e.key === 'Escape') {
+      renaming = false
+    } else if (e.key === 'Enter') {
+      handleRenameSubmit()
+    }
   }
 
   async function handleCategorySelect(category: string) {
@@ -280,7 +402,24 @@
             </svg>
             検索
           </button>
+          <button class="create-btn" onclick={startCreate} title="新規ファイル">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+          </button>
         </div>
+        {#if creating}
+          <div class="create-input-row">
+            <input
+              bind:this={createInputEl}
+              bind:value={newFileName}
+              placeholder="filename.md"
+              class="create-input"
+              onkeydown={handleCreateKeydown}
+              onblur={() => { if (!newFileName.trim()) creating = false }}
+            />
+          </div>
+        {/if}
         <FileTree
           nodes={$fileTree}
           selectedPath={$currentFilePath}
@@ -294,10 +433,25 @@
     <div class="mobile-pane">
       {#if $currentFilePath}
         <div class="note-header">
-          <span class="file-name">{$currentFilePath.split('/').pop()}</span>
+          {#if renaming}
+            <input
+              bind:this={renameInputEl}
+              bind:value={renameValue}
+              class="rename-input"
+              onkeydown={handleRenameKeydown}
+              onblur={handleRenameSubmit}
+            />
+          {:else}
+            <span class="file-name">{$currentFilePath.split('/').pop()}</span>
+          {/if}
           {#if noteMode === 'editor' && $isDirty}
             <span class="dirty-indicator">*</span>
           {/if}
+          <button class="action-menu-btn" onclick={() => (showFileActions = true)} title="ファイル操作">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+              <circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/>
+            </svg>
+          </button>
           <button class="mode-toggle" onclick={toggleNoteMode} title={noteMode === 'editor' ? 'プレビュー' : '編集'}>
             {#if noteMode === 'editor'}
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -313,17 +467,19 @@
 
         {#if noteMode === 'editor'}
           <section class="editor-section">
-            {#await import('@kotonoha/ui').then(m => m.Editor) then Editor}
-              <svelte:component
-                this={Editor}
-                content={editorContent}
-                vimMode={false}
-                livePreviewMode={true}
-                onChange={handleEditorChange}
-                onCursorLineChange={(line: number) => (cursorLine = line)}
-                onWikilinkNavigate={handleWikilinkClick}
-              />
-            {/await}
+            {#key $currentFilePath}
+              {#await import('@kotonoha/ui').then(m => m.Editor) then Editor}
+                <svelte:component
+                  this={Editor}
+                  content={editorContent}
+                  vimMode={false}
+                  livePreviewMode={true}
+                  onChange={handleEditorChange}
+                  onCursorLineChange={(line: number) => (cursorLine = line)}
+                  onWikilinkNavigate={handleWikilinkClick}
+                />
+              {/await}
+            {/key}
           </section>
         {:else}
           <section class="preview-section">
@@ -389,6 +545,47 @@
   </button>
 </nav>
 
+{#if showFileActions}
+  <!-- svelte-ignore a11y_click_events_have_key_events -->
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div class="overlay" onclick={() => (showFileActions = false)}>
+    <div class="action-sheet" onclick={(e) => e.stopPropagation()}>
+      <div class="action-sheet-header">
+        <span class="action-sheet-title">{$currentFilePath?.split('/').pop()}</span>
+      </div>
+      <button class="action-sheet-item" onclick={startRename}>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+        </svg>
+        名前を変更
+      </button>
+      <button class="action-sheet-item danger" onclick={() => { showFileActions = false; showDeleteConfirm = true; }}>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
+        </svg>
+        削除
+      </button>
+      <button class="action-sheet-cancel" onclick={() => (showFileActions = false)}>
+        キャンセル
+      </button>
+    </div>
+  </div>
+{/if}
+
+{#if showDeleteConfirm}
+  <!-- svelte-ignore a11y_click_events_have_key_events -->
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div class="overlay" onclick={() => (showDeleteConfirm = false)}>
+    <div class="confirm-sheet" onclick={(e) => e.stopPropagation()}>
+      <div class="confirm-msg">「{$currentFilePath?.split('/').pop()}」を削除しますか？</div>
+      <div class="confirm-actions">
+        <button class="confirm-delete" onclick={handleDeleteFile}>削除</button>
+        <button class="confirm-cancel" onclick={() => (showDeleteConfirm = false)}>キャンセル</button>
+      </div>
+    </div>
+  </div>
+{/if}
+
 <style>
   .sidebar {
     width: 100%;
@@ -424,6 +621,46 @@
   .search-btn:hover {
     background: var(--koto-bg-hover);
     color: var(--koto-text-secondary);
+  }
+
+  .create-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: var(--koto-touch-min);
+    min-height: var(--koto-touch-min);
+    background: none;
+    border: 1px solid var(--koto-border);
+    color: var(--koto-text-muted);
+    cursor: pointer;
+    border-radius: var(--koto-radius-sm);
+    flex-shrink: 0;
+    transition: background var(--koto-transition-fast), color var(--koto-transition-fast);
+  }
+
+  .create-btn:active {
+    color: var(--koto-accent);
+    background: var(--koto-accent-subtle);
+  }
+
+  .create-input-row {
+    padding: var(--koto-space-2);
+    border-bottom: 1px solid var(--koto-border);
+    flex-shrink: 0;
+  }
+
+  .create-input {
+    width: 100%;
+    min-height: var(--koto-touch-min);
+    padding: var(--koto-space-2) var(--koto-space-3);
+    background: var(--koto-bg-input);
+    border: 1px solid var(--koto-accent);
+    border-radius: var(--koto-radius-sm);
+    color: var(--koto-text-primary);
+    font-size: var(--koto-font-size-sm);
+    font-family: var(--koto-font-mono);
+    outline: none;
+    box-sizing: border-box;
   }
 
   .editor-section {
@@ -515,6 +752,38 @@
     flex-shrink: 0;
   }
 
+  .rename-input {
+    flex: 1;
+    min-height: 28px;
+    padding: var(--koto-space-1) var(--koto-space-2);
+    background: var(--koto-bg-input);
+    border: 1px solid var(--koto-accent);
+    border-radius: var(--koto-radius-sm);
+    color: var(--koto-text-primary);
+    font-size: var(--koto-font-size-sm);
+    outline: none;
+  }
+
+  .action-menu-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: var(--koto-touch-min);
+    min-height: var(--koto-touch-min);
+    margin: calc(-1 * var(--koto-space-2)) 0;
+    background: none;
+    border: none;
+    color: var(--koto-text-muted);
+    cursor: pointer;
+    border-radius: var(--koto-radius-sm);
+    transition: color var(--koto-transition-fast), background var(--koto-transition-fast);
+  }
+
+  .action-menu-btn:active {
+    color: var(--koto-accent);
+    background: var(--koto-accent-subtle);
+  }
+
   .mode-toggle {
     display: flex;
     align-items: center;
@@ -580,5 +849,130 @@
     height: 4px;
     border-radius: 50%;
     background: var(--koto-accent);
+  }
+
+  /* Overlay */
+  .overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    z-index: 1000;
+  }
+
+  /* Action sheet (bottom sheet) */
+  .action-sheet {
+    width: 100%;
+    max-width: 480px;
+    background: var(--koto-bg-surface);
+    border-radius: var(--koto-radius-lg) var(--koto-radius-lg) 0 0;
+    padding-bottom: var(--koto-safe-bottom);
+    overflow: hidden;
+  }
+
+  .action-sheet-header {
+    padding: var(--koto-space-4);
+    border-bottom: 1px solid var(--koto-border);
+    text-align: center;
+  }
+
+  .action-sheet-title {
+    font-size: var(--koto-font-size-sm);
+    color: var(--koto-text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .action-sheet-item {
+    display: flex;
+    align-items: center;
+    gap: var(--koto-space-3);
+    width: 100%;
+    min-height: var(--koto-touch-min);
+    padding: var(--koto-space-3) var(--koto-space-4);
+    background: none;
+    border: none;
+    color: var(--koto-text-primary);
+    font-size: var(--koto-font-size-base);
+    cursor: pointer;
+    text-align: left;
+    transition: background var(--koto-transition-fast);
+  }
+
+  .action-sheet-item:active {
+    background: var(--koto-bg-hover);
+  }
+
+  .action-sheet-item.danger {
+    color: #f38ba8;
+  }
+
+  .action-sheet-cancel {
+    display: block;
+    width: 100%;
+    min-height: var(--koto-touch-min);
+    padding: var(--koto-space-3);
+    margin-top: var(--koto-space-2);
+    background: none;
+    border: none;
+    border-top: 1px solid var(--koto-border);
+    color: var(--koto-text-muted);
+    font-size: var(--koto-font-size-base);
+    cursor: pointer;
+    text-align: center;
+  }
+
+  /* Delete confirmation sheet */
+  .confirm-sheet {
+    width: 100%;
+    max-width: 480px;
+    background: var(--koto-bg-surface);
+    border-radius: var(--koto-radius-lg) var(--koto-radius-lg) 0 0;
+    padding: var(--koto-space-4);
+    padding-bottom: calc(var(--koto-space-4) + var(--koto-safe-bottom));
+  }
+
+  .confirm-msg {
+    text-align: center;
+    color: var(--koto-text-secondary);
+    font-size: var(--koto-font-size-base);
+    padding: var(--koto-space-4) 0;
+  }
+
+  .confirm-actions {
+    display: flex;
+    gap: var(--koto-space-3);
+  }
+
+  .confirm-actions button {
+    flex: 1;
+    min-height: var(--koto-touch-min);
+    border: none;
+    border-radius: var(--koto-radius-md);
+    font-size: var(--koto-font-size-base);
+    cursor: pointer;
+    transition: background var(--koto-transition-fast);
+  }
+
+  .confirm-delete {
+    background: #f38ba8;
+    color: #1e1d20;
+    font-weight: 600;
+  }
+
+  .confirm-delete:active {
+    background: #e06c8a;
+  }
+
+  .confirm-cancel {
+    background: var(--koto-bg-elevated);
+    color: var(--koto-text-secondary);
+  }
+
+  .confirm-cancel:active {
+    background: var(--koto-bg-hover);
   }
 </style>
