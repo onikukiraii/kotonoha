@@ -136,6 +136,93 @@ class HorizontalRuleWidget extends WidgetType {
   }
 }
 
+// --- Table rendering ---
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
+
+function renderInlineCell(text: string): string {
+  let out = escapeHtml(text)
+  out = out.replace(/\[\[([^\]]+)\]\]/g, '<span class="cm-lp-wikilink">$1</span>')
+  out = out.replace(/`([^`]+)`/g, '<code>$1</code>')
+  out = out.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+  out = out.replace(/(^|[^*])\*([^*]+)\*(?!\*)/g, '$1<em>$2</em>')
+  out = out.replace(/~~([^~]+)~~/g, '<del>$1</del>')
+  return out
+}
+
+function splitTableRow(line: string): string[] {
+  const trimmed = line.trim()
+  const inner = trimmed.replace(/^\|/, '').replace(/\|$/, '')
+  return inner.split('|').map((c) => c.trim())
+}
+
+function parseAlignments(delimiter: string): Array<'left' | 'right' | 'center' | null> {
+  return splitTableRow(delimiter).map((cell) => {
+    const left = cell.startsWith(':')
+    const right = cell.endsWith(':')
+    if (left && right) return 'center'
+    if (right) return 'right'
+    if (left) return 'left'
+    return null
+  })
+}
+
+function renderTableHTML(source: string): string {
+  const lines = source.split('\n').filter((l) => l.trim().startsWith('|'))
+  if (lines.length < 2) return escapeHtml(source)
+
+  const headers = splitTableRow(lines[0])
+  const aligns = parseAlignments(lines[1])
+  const rows = lines.slice(2).map(splitTableRow)
+
+  const alignAttr = (i: number) => {
+    const a = aligns[i]
+    return a ? ` style="text-align:${a}"` : ''
+  }
+
+  let html = '<table class="cm-lp-table-el"><thead><tr>'
+  headers.forEach((h, i) => {
+    html += `<th${alignAttr(i)}>${renderInlineCell(h)}</th>`
+  })
+  html += '</tr></thead><tbody>'
+  for (const row of rows) {
+    html += '<tr>'
+    row.forEach((c, i) => {
+      html += `<td${alignAttr(i)}>${renderInlineCell(c)}</td>`
+    })
+    html += '</tr>'
+  }
+  html += '</tbody></table>'
+  return html
+}
+
+class TableWidget extends WidgetType {
+  constructor(readonly source: string) {
+    super()
+  }
+
+  toDOM(): HTMLElement {
+    const container = document.createElement('div')
+    container.className = 'cm-lp-table'
+    container.innerHTML = renderTableHTML(this.source)
+    return container
+  }
+
+  eq(other: TableWidget): boolean {
+    return this.source === other.source
+  }
+
+  ignoreEvent(): boolean {
+    return false
+  }
+}
+
 // --- Helpers ---
 
 function getCursorLines(state: EditorState): Set<number> {
@@ -379,6 +466,32 @@ function buildDecorations(
             deco: Decoration.mark({ class: 'cm-lp-codeblock' }),
           })
           return false // don't descend
+        }
+
+        // --- Table (GFM) ---
+        if (type === 'Table') {
+          if (!onCursor) {
+            const startLine = state.doc.lineAt(node.from)
+            const endLine = state.doc.lineAt(node.to)
+            const fullText = state.doc.sliceString(startLine.from, endLine.to)
+            for (let ln = startLine.number; ln <= endLine.number; ln++) {
+              const line = state.doc.line(ln)
+              entries.push({
+                from: line.from,
+                to: line.to,
+                deco: Decoration.replace({}),
+              })
+            }
+            entries.push({
+              from: startLine.from,
+              to: startLine.from,
+              deco: Decoration.widget({
+                widget: new TableWidget(fullText),
+                side: -1,
+              }),
+            })
+          }
+          return false
         }
 
         // --- Link ---
@@ -691,6 +804,33 @@ const livePreviewTheme = EditorView.theme(
       color: 'var(--text-muted, #6c7086)',
       fontStyle: 'italic',
       textAlign: 'center',
+    },
+    '.cm-lp-table': {
+      display: 'block',
+      margin: '0.5em 0',
+      overflowX: 'auto',
+    },
+    '.cm-lp-table .cm-lp-table-el': {
+      borderCollapse: 'collapse',
+      fontFamily: 'var(--font-sans, sans-serif)',
+      fontSize: '0.95em',
+    },
+    '.cm-lp-table th, .cm-lp-table td': {
+      border: '1px solid var(--border, #45475a)',
+      padding: '4px 10px',
+      textAlign: 'left',
+      verticalAlign: 'top',
+    },
+    '.cm-lp-table th': {
+      background: 'var(--bg-tertiary, rgba(255,255,255,0.04))',
+      fontWeight: 'bold',
+    },
+    '.cm-lp-table code': {
+      backgroundColor: 'rgba(255,255,255,0.06)',
+      padding: '1px 4px',
+      borderRadius: '3px',
+      fontFamily: 'var(--font-mono, monospace)',
+      fontSize: '0.9em',
     },
   },
   { dark: true },
