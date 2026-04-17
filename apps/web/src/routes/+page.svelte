@@ -12,6 +12,7 @@
   } from '$lib/stores/vault.js'
   import { isDirty, scheduleSave } from '$lib/stores/editor.js'
   import { searchFiles, searchFullText, openDailyNote, getSubdirs, createLearningLog, createNewFile, deleteFileApi, renameFileApi } from '$lib/api.js'
+  import { renderMarkdownClient } from '$lib/markdown.js'
   import { LEARNING_LOGS_DIR } from '@kotonoha/ui/learning-log'
 
   // Mobile: 2 tabs (files / note), note has editor/preview toggle
@@ -146,31 +147,6 @@
     editorContent = content
     renderedHtml = renderMarkdownClient(content)
     scheduleSave(content)
-  }
-
-  function renderMarkdownClient(content: string): string {
-    return content.split('\n').map((line, i) => {
-      let escaped = line
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-
-      escaped = escaped.replace(
-        /\[\[([^\]]+)\]\]/g,
-        '<a class="wikilink" data-target="$1">$1</a>',
-      )
-
-      const attr = `data-source-line="${i + 1}"`
-      const headingMatch = escaped.match(/^(#{1,6}) (.*)/)
-      if (headingMatch) {
-        const level = headingMatch[1].length
-        return `<h${level} ${attr}>${headingMatch[2]}</h${level}>`
-      }
-      if (escaped.trim() === '') {
-        return '<br>'
-      }
-      return `<span ${attr}>${escaped}</span><br>`
-    }).join('\n')
   }
 
   async function handleSearch(query: string, mode: 'filename' | 'fulltext') {
