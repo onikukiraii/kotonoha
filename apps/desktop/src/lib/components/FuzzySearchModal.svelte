@@ -256,7 +256,7 @@
       e.preventDefault();
       selectedIndex = Math.max(selectedIndex - 1, 0);
       searchScrollIntoView();
-    } else if (e.key === "Enter" && results[selectedIndex]) {
+    } else if (e.key === "Enter" && !e.isComposing && results[selectedIndex]) {
       onSelect(results[selectedIndex].path);
     } else if (e.key === "Tab") {
       e.preventDefault();
@@ -269,7 +269,7 @@
     if (creating) {
       if (e.key === "Escape") {
         creating = false;
-      } else if (e.key === "Enter") {
+      } else if (e.key === "Enter" && !e.isComposing) {
         handleCreateSubmit();
       }
       return;
