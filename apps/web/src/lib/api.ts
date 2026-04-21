@@ -1,4 +1,5 @@
 import type { FileNode, SearchResult, BacklinkResult, GitStatus } from '@kotonoha/types'
+import type { QueryResult, PropertySchema } from '@kotonoha/base'
 
 async function fetchApi<T>(path: string, options: RequestInit = {}): Promise<T> {
   const headers: Record<string, string> = {
@@ -105,6 +106,42 @@ export async function createLearningLog(category: string): Promise<{ path: strin
   const path = getLearningLogPath(category)
   await createNewFile(path, '')
   return { path }
+}
+
+// Base (Obsidian Bases)
+export async function runBaseApi(path: string): Promise<QueryResult> {
+  return fetchApi(`/api/base/run?path=${encodeURIComponent(path)}`)
+}
+
+export async function updateBasePropertyApi(
+  path: string,
+  key: string,
+  value: unknown,
+): Promise<void> {
+  await fetchApi('/api/base/update-property', {
+    method: 'POST',
+    body: JSON.stringify({ path, key, value }),
+  })
+}
+
+export async function getBaseContentApi(path: string): Promise<string> {
+  const { yaml } = await fetchApi<{ yaml: string }>(
+    `/api/base/content?path=${encodeURIComponent(path)}`,
+  )
+  return yaml
+}
+
+export async function saveBaseContentApi(path: string, yaml: string): Promise<void> {
+  await fetchApi('/api/base/content', {
+    method: 'PUT',
+    body: JSON.stringify({ path, yaml }),
+  })
+}
+
+export async function getBaseSchemaApi(folder?: string | null): Promise<PropertySchema> {
+  const qs = new URLSearchParams()
+  if (folder) qs.set('folder', folder)
+  return fetchApi(`/api/base/schema?${qs.toString()}`)
 }
 
 // Git

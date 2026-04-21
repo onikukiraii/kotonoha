@@ -38,7 +38,7 @@ export async function getFileTree(dirPath?: string): Promise<FileNode[]> {
           children,
         })
       }
-    } else if (entry.name.endsWith('.md')) {
+    } else if (entry.name.endsWith('.md') || entry.name.endsWith('.base')) {
       const fileStat = await stat(fullPath)
       nodes.push({
         name: entry.name,

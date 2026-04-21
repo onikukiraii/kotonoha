@@ -2,17 +2,8 @@ import path from 'path'
 import { stat } from 'fs/promises'
 import type { FileNode } from '@kotonoha/types'
 import { getFileTree, readFileContent, resolveSafePath } from './vault.js'
-import { extractWikilinks, extractTags } from './parser.js'
-import {
-  getDb,
-  upsertFile,
-  deleteFileRecord,
-  getAllFiles,
-  upsertLinks,
-  upsertTags,
-  upsertFts,
-} from '$lib/db/index.js'
-import { env } from './env.js'
+import { getDb, deleteFileRecord, getAllFiles } from '$lib/db/index.js'
+import { indexMarkdownContent, indexBaseContent } from './indexer-core.js'
 
 function flattenFiles(nodes: FileNode[]): FileNode[] {
   const result: FileNode[] = []
@@ -35,7 +26,6 @@ export async function buildDifferentialIndex(): Promise<void> {
 
   const db = getDb()
   const transaction = db.transaction(() => {
-    // Remove deleted files
     for (const dbFile of dbFiles) {
       if (!currentPaths.has(dbFile.path)) {
         deleteFileRecord(dbFile.path)
@@ -44,11 +34,14 @@ export async function buildDifferentialIndex(): Promise<void> {
   })
   transaction()
 
-  // Update new/modified files
   for (const file of currentFiles) {
     const dbUpdatedAt = dbMap.get(file.path)
-    if (dbUpdatedAt !== undefined && file.updated_at !== undefined && Math.abs(dbUpdatedAt - file.updated_at) < 1000) {
-      continue // No change
+    if (
+      dbUpdatedAt !== undefined &&
+      file.updated_at !== undefined &&
+      Math.abs(dbUpdatedAt - file.updated_at) < 1000
+    ) {
+      continue
     }
 
     try {
@@ -63,21 +56,16 @@ export async function buildDifferentialIndex(): Promise<void> {
 export async function updateFileIndex(filePath: string, content: string): Promise<void> {
   const absPath = resolveSafePath(filePath)
   const fileStat = await stat(absPath)
-  const filename = path.basename(filePath)
-
-  const wikilinks = extractWikilinks(content)
-  const tags = extractTags(content)
-
   const db = getDb()
-  const transaction = db.transaction(() => {
-    upsertFile(filePath, filename, fileStat.mtimeMs)
-    upsertLinks(filePath, wikilinks)
-    upsertTags(filePath, tags)
-    upsertFts(filePath, content)
-  })
-  transaction()
+  if (filePath.endsWith('.base')) {
+    indexBaseContent(db, filePath, content, fileStat.mtimeMs)
+  } else {
+    indexMarkdownContent(db, filePath, content, fileStat.mtimeMs)
+  }
 }
 
 export async function removeFileIndex(filePath: string): Promise<void> {
   deleteFileRecord(filePath)
 }
+
+export { path }

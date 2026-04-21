@@ -2,6 +2,7 @@ import Database from 'better-sqlite3'
 import { mkdirSync } from 'fs'
 import path from 'path'
 import type { SearchResult, BacklinkResult } from '@kotonoha/types'
+import { PROPERTIES_SCHEMA } from './properties.js'
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS files (
@@ -27,6 +28,14 @@ CREATE VIRTUAL TABLE IF NOT EXISTS fts USING fts5(
   content,
   tokenize = 'trigram'
 );
+
+CREATE TABLE IF NOT EXISTS bases (
+  path TEXT PRIMARY KEY,
+  raw_yaml TEXT NOT NULL,
+  parsed_json TEXT NOT NULL,
+  mtime INTEGER NOT NULL
+);
+${PROPERTIES_SCHEMA}
 `
 
 let db: Database.Database | null = null
@@ -63,6 +72,8 @@ export function deleteFileRecord(filePath: string): void {
   database.prepare('DELETE FROM links WHERE source_path = ?').run(filePath)
   database.prepare('DELETE FROM tags WHERE path = ?').run(filePath)
   database.prepare('DELETE FROM fts WHERE path = ?').run(filePath)
+  database.prepare('DELETE FROM properties WHERE path = ?').run(filePath)
+  database.prepare('DELETE FROM bases WHERE path = ?').run(filePath)
 }
 
 export function getAllFiles(): { path: string; filename: string; updated_at: number }[] {
