@@ -1,0 +1,121 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <!-- 和紙風の背景 -->
+    <radialGradient id="paper" cx="42%" cy="36%" r="78%">
+      <stop offset="0%" stop-color="#fbf5e6"/>
+      <stop offset="55%" stop-color="#f2e7cb"/>
+      <stop offset="100%" stop-color="#e4d1a6"/>
+    </radialGradient>
+
+    <!-- 葉のベースグラデーション（上=若葉、下=深緑） -->
+    <linearGradient id="leaf" x1="30%" y1="4%" x2="72%" y2="100%">
+      <stop offset="0%"  stop-color="#d6e7a4"/>
+      <stop offset="28%" stop-color="#9ec27a"/>
+      <stop offset="60%" stop-color="#547f49"/>
+      <stop offset="100%" stop-color="#1f3b26"/>
+    </linearGradient>
+
+    <!-- 上面のハイライト -->
+    <linearGradient id="sheen" x1="30%" y1="8%" x2="58%" y2="46%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.55"/>
+      <stop offset="55%" stop-color="#ffffff" stop-opacity="0.06"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+
+    <!-- 葉先の影（深まり） -->
+    <radialGradient id="rim" cx="55%" cy="92%" r="55%">
+      <stop offset="0%"   stop-color="#122a18" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#122a18" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- いぶし金の葉脈 -->
+    <linearGradient id="vein" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f4dfa2"/>
+      <stop offset="55%" stop-color="#c0a060"/>
+      <stop offset="100%" stop-color="#7a5c22"/>
+    </linearGradient>
+
+    <!-- 和紙のグレイン（控えめ） -->
+    <filter id="grain" x="0%" y="0%" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency="1.2" numOctaves="2" seed="11"/>
+      <feColorMatrix values="0 0 0 0 0.40
+                             0 0 0 0 0.32
+                             0 0 0 0 0.18
+                             0 0 0 0.04 0"/>
+      <feComposite in2="SourceGraphic" operator="in"/>
+    </filter>
+
+    <!-- 葉の柔らかい影 -->
+    <filter id="leafShadow" x="-25%" y="-25%" width="150%" height="150%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="24"/>
+      <feOffset dx="10" dy="30"/>
+      <feComponentTransfer>
+        <feFuncA type="linear" slope="0.38"/>
+      </feComponentTransfer>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <!-- 非対称な葉：茎が上、葉先が下左に伸びる -->
+    <path id="leafShape" d="
+      M 582 84
+      C 684 96, 770 148, 820 240
+      C 878 346, 896 468, 866 604
+      C 834 748, 744 856, 594 920
+      C 528 948, 468 946, 422 914
+      C 344 858, 254 768, 186 660
+      C 112 544, 84 420, 120 300
+      C 158 184, 270 102, 402 84
+      C 464 76, 524 76, 582 84 Z"/>
+  </defs>
+
+  <!-- 背景 -->
+  <rect width="1024" height="1024" rx="230" ry="230" fill="url(#paper)"/>
+  <rect width="1024" height="1024" rx="230" ry="230" fill="#fff" filter="url(#grain)"/>
+
+  <!-- 葉 -->
+  <g transform="rotate(-6 512 512)" filter="url(#leafShadow)">
+    <use href="#leafShape" fill="url(#leaf)"/>
+    <use href="#leafShape" fill="url(#rim)"/>
+    <use href="#leafShape" fill="url(#sheen)"/>
+
+    <!-- 茎 -->
+    <path d="M 582 84 C 588 54, 614 36, 646 28"
+          stroke="#7d5d24" stroke-width="11" stroke-linecap="round" fill="none"/>
+
+    <!-- 主脈：茎から葉先（左下）へ優美にカーブ -->
+    <path d="M 574 104
+             C 520 260, 460 440, 400 618
+             C 360 740, 332 838, 318 910"
+          stroke="url(#vein)" stroke-width="10"
+          stroke-linecap="round" fill="none" opacity="0.88"/>
+
+    <!-- 右側の支脈 -->
+    <path d="M 542 238 C 630 246, 712 288, 772 352"
+          stroke="url(#vein)" stroke-width="6" fill="none" stroke-linecap="round" opacity="0.78"/>
+    <path d="M 498 416 C 606 444, 706 502, 784 582"
+          stroke="url(#vein)" stroke-width="5.5" fill="none" stroke-linecap="round" opacity="0.7"/>
+    <path d="M 452 594 C 552 638, 640 694, 710 758"
+          stroke="url(#vein)" stroke-width="5" fill="none" stroke-linecap="round" opacity="0.6"/>
+
+    <!-- 左側の支脈 -->
+    <path d="M 548 238 C 454 248, 368 286, 290 348"
+          stroke="url(#vein)" stroke-width="6" fill="none" stroke-linecap="round" opacity="0.78"/>
+    <path d="M 504 416 C 386 448, 284 508, 200 584"
+          stroke="url(#vein)" stroke-width="5.5" fill="none" stroke-linecap="round" opacity="0.7"/>
+    <path d="M 460 594 C 358 640, 278 696, 230 752"
+          stroke="url(#vein)" stroke-width="5" fill="none" stroke-linecap="round" opacity="0.6"/>
+
+    <!-- 葉先の細脈 -->
+    <path d="M 352 794 C 394 828, 434 850, 462 862"
+          stroke="url(#vein)" stroke-width="3.5" fill="none" stroke-linecap="round" opacity="0.5"/>
+    <path d="M 346 794 C 312 828, 288 858, 272 878"
+          stroke="url(#vein)" stroke-width="3.5" fill="none" stroke-linecap="round" opacity="0.5"/>
+
+    <!-- 露の雫（葉の上部に小さく） -->
+    <ellipse cx="444" cy="320" rx="18" ry="22" fill="#ffffff" opacity="0.55"/>
+    <ellipse cx="438" cy="314" rx="6" ry="8" fill="#ffffff" opacity="0.95"/>
+  </g>
+</svg>
