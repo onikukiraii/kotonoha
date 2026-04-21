@@ -256,8 +256,9 @@
       e.preventDefault();
       selectedIndex = Math.max(selectedIndex - 1, 0);
       searchScrollIntoView();
-    } else if (e.key === "Enter" && !e.isComposing && results[selectedIndex]) {
-      onSelect(results[selectedIndex].path);
+    } else if (e.key === "Enter") {
+      if (e.isComposing || e.keyCode === 229) return;
+      if (results[selectedIndex]) onSelect(results[selectedIndex].path);
     } else if (e.key === "Tab") {
       e.preventDefault();
       const idx = modes.indexOf(currentMode);
@@ -269,7 +270,8 @@
     if (creating) {
       if (e.key === "Escape") {
         creating = false;
-      } else if (e.key === "Enter" && !e.isComposing) {
+      } else if (e.key === "Enter") {
+        if (e.isComposing || e.keyCode === 229) return;
         handleCreateSubmit();
       }
       return;
