@@ -1,0 +1,36 @@
+# Obsidian 公式ドキュメントの Bases チュートリアル相当の書式。
+# https://obsidian.md/help/bases/syntax
+filters:
+  and:
+    - 'file.inFolder("Books")'
+    - 'status != "abandoned"'
+
+formulas:
+  year_published: 'date(published) - date("1900-01-01")'
+
+properties:
+  note.status:
+    displayName: "Status"
+  note.rating:
+    displayName: "Rating"
+
+views:
+  - type: table
+    name: "Currently Reading"
+    filters:
+      - 'status == "reading"'
+    order: [file.name, rating]
+    sort:
+      - column: rating
+        direction: desc
+
+  - type: cards
+    name: "Finished"
+    filters:
+      - 'status == "finished"'
+    image: cover
+    order: [file.name, rating, year_published]
+    groupBy:
+      property: genre
+    summaries:
+      rating: Average

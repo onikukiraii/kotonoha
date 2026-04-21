@@ -1,0 +1,71 @@
+{
+  "basePath": "library.base",
+  "views": [
+    {
+      "name": "All Books",
+      "type": "cards",
+      "columns": ["file.name", "author", "rating", "pages"],
+      "image": "cover",
+      "groups": [
+        {
+          "key": "novel",
+          "rows": [
+            {
+              "path": "books/book-1.md",
+              "properties": {
+                "file.name": "book-1.md",
+                "author": "kafka",
+                "rating": 5,
+                "pages": 300,
+                "cover": "images/metamorphosis.jpg"
+              }
+            },
+            {
+              "path": "books/book-2.md",
+              "properties": {
+                "file.name": "book-2.md",
+                "author": "kafka",
+                "rating": 4,
+                "pages": 420,
+                "cover": "images/trial.jpg"
+              }
+            }
+          ],
+          "summaries": {
+            "pages": 720,
+            "rating": 4.5
+          }
+        },
+        {
+          "key": "tech",
+          "rows": [
+            {
+              "path": "books/book-3.md",
+              "properties": {
+                "file.name": "book-3.md",
+                "author": "robert",
+                "rating": 5,
+                "pages": 550,
+                "cover": "images/clean-arch.jpg"
+              }
+            },
+            {
+              "path": "books/book-4.md",
+              "properties": {
+                "file.name": "book-4.md",
+                "author": "joel",
+                "rating": 3,
+                "pages": 360,
+                "cover": null
+              }
+            }
+          ],
+          "summaries": {
+            "pages": 910,
+            "rating": 4.0
+          }
+        }
+      ]
+    }
+  ]
+}

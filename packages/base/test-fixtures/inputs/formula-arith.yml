@@ -1,0 +1,5 @@
+# Arithmetic + comparison formulas.
+formulas:
+  double_pages: 'pages * 2'
+  is_thick: 'pages > 400'
+  total_score: 'rating * 20 + progress'

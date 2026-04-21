@@ -1,0 +1,11 @@
+views:
+  - type: cards
+    name: "Gallery"
+    order:
+      - file.name
+      - rating
+    image: cover
+    groupBy:
+      property: category
+    summaries:
+      rating: Average

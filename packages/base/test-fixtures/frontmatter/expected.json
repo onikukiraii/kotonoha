@@ -1,0 +1,53 @@
+{
+  "_comment": "TS splitFrontmatter + Rust 側 frontmatter.rs の両方がこの期待値を返すこと。properties は null キー無し・型推論済み。date は ISO8601 string で保持し、value_type で date を示す。",
+  "simple.md": {
+    "ok": true,
+    "hadFrontmatter": true,
+    "properties": {
+      "title": { "type": "string", "value": "Hello" },
+      "status": { "type": "string", "value": "active" },
+      "rating": { "type": "number", "value": 5 },
+      "finished": { "type": "bool", "value": true },
+      "tags": { "type": "list", "value": ["foo", "bar"] }
+    },
+    "body": "\nBody goes here.\n"
+  },
+  "date.md": {
+    "ok": true,
+    "hadFrontmatter": true,
+    "properties": {
+      "due_date": { "type": "date", "value": "2026-05-15" },
+      "created_at": { "type": "date", "value": "2026-01-01T09:00:00+09:00" }
+    },
+    "body": "\nDate types.\n"
+  },
+  "nested.md": {
+    "ok": true,
+    "hadFrontmatter": true,
+    "properties": {
+      "owner": {
+        "type": "object",
+        "value": { "name": "alice", "email": "alice@example.com" }
+      },
+      "progress": { "type": "number", "value": 30 },
+      "score": { "type": "number", "value": 4.5 }
+    },
+    "body": "\nNested object + mixed numerics.\n"
+  },
+  "no-fm.md": {
+    "ok": true,
+    "properties": {},
+    "body": "# Plain note\n\nfrontmatter 無し。splitFrontmatter は fm=null, body=全文 を返すべき。\n",
+    "hadFrontmatter": false
+  },
+  "empty-fm.md": {
+    "ok": true,
+    "properties": {},
+    "body": "\nfrontmatter 区切りはあるが中身が空。properties は {} になる。\n",
+    "hadFrontmatter": true
+  },
+  "invalid.md": {
+    "ok": false,
+    "error": "yaml_parse_error"
+  }
+}

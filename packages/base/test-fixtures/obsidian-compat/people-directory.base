@@ -1,0 +1,17 @@
+# "People" ベース、日付のある人名ディレクトリ風。
+filters:
+  or:
+    - 'file.hasTag("person")'
+    - 'file.inFolder("People")'
+
+formulas:
+  days_since_contact: 'date("2026-04-20") - last_contact'
+
+views:
+  - type: list
+    name: "Contact"
+    sort:
+      - column: last_contact
+        direction: asc
+    limit: 20
+    order: [file.name, last_contact, days_since_contact]

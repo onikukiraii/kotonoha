@@ -1,0 +1,43 @@
+{
+  "basePath": "tasks.base",
+  "views": [
+    {
+      "name": "Active Projects",
+      "type": "table",
+      "columns": ["file.name", "priority", "due_date", "owner", "progress"],
+      "rows": [
+        {
+          "path": "projects/proj-d.md",
+          "properties": {
+            "file.name": "proj-d.md",
+            "priority": "high",
+            "due_date": "2026-03-01",
+            "owner": "bob",
+            "progress": 40
+          }
+        },
+        {
+          "path": "projects/proj-a.md",
+          "properties": {
+            "file.name": "proj-a.md",
+            "priority": "high",
+            "due_date": "2026-05-15",
+            "owner": "alice",
+            "progress": 60
+          }
+        },
+        {
+          "path": "projects/proj-b.md",
+          "properties": {
+            "file.name": "proj-b.md",
+            "priority": "medium",
+            "due_date": "2026-04-25",
+            "owner": "bob",
+            "progress": 30
+          }
+        }
+      ],
+      "summaries": {}
+    }
+  ]
+}

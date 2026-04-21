@@ -1,0 +1,6 @@
+# Function-call filter statements.
+filters:
+  and:
+    - 'file.hasTag("work")'
+    - 'file.inFolder("projects")'
+    - 'file.hasLink("proj-b")'

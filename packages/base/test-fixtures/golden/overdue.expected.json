@@ -1,0 +1,22 @@
+{
+  "basePath": "overdue.base",
+  "_note": "今日 = 2026-04-20 想定。days_overdue は整数日、is_overdue は真偽値。",
+  "views": [
+    {
+      "name": "Overdue",
+      "type": "list",
+      "columns": ["file.name", "due_date", "days_overdue"],
+      "rows": [
+        {
+          "path": "projects/proj-d.md",
+          "properties": {
+            "file.name": "proj-d.md",
+            "due_date": "2026-03-01",
+            "days_overdue": 50
+          }
+        }
+      ],
+      "summaries": {}
+    }
+  ]
+}

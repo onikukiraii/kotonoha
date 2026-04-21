@@ -1,0 +1,5 @@
+# AND filter. Expected AST: And(BinaryOp(==), Call(file.inFolder, "projects")).
+filters:
+  and:
+    - 'status == "active"'
+    - 'file.inFolder("projects")'

@@ -1,0 +1,4 @@
+# Minimal single-statement filter.
+# Expected filter AST: BinaryOp(==, Ident("status"), Literal("active"))
+filters:
+  - 'status == "active"'

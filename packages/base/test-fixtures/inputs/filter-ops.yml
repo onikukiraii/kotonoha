@@ -1,0 +1,8 @@
+# Full operator set. Used to drive evaluator test cases.
+filters:
+  and:
+    - 'progress >= 50'
+    - 'progress < 100'
+    - 'priority != "low"'
+    - 'rating <= 5'
+    - 'pages > 200'

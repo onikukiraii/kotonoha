@@ -1,0 +1,19 @@
+# 複数条件の OR / NOT / 演算子混在パターン。
+filters:
+  and:
+    - or:
+        - 'file.hasTag("urgent")'
+        - 'priority == "high"'
+    - not:
+        - 'status == "done"'
+
+views:
+  - type: table
+    name: "Focus"
+    filters:
+      - 'progress < 100'
+    order: [file.name, priority, progress]
+    sort:
+      - column: priority
+        direction: asc
+    limit: 50

@@ -1,0 +1,5 @@
+# Date + duration literal.
+formulas:
+  next_week: 'date("2026-04-20") + "7d"'
+  last_quarter: 'file.mtime - "90d"'
+  days_left: 'due_date - date("2026-04-20")'

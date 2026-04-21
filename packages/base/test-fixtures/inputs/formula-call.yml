@@ -1,0 +1,5 @@
+# Allowlisted function calls.
+formulas:
+  has_frontend: 'file.hasTag("frontend")'
+  ifelse: 'if(progress >= 100, "done", "wip")'
+  starts_with_p: 'startsWith(file.name, "p")'

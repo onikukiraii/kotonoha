@@ -1,0 +1,6 @@
+# OR + NOT nested filter.
+filters:
+  or:
+    - 'priority == "high"'
+    - not:
+        - 'status == "done"'

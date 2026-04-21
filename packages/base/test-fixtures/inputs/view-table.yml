@@ -1,0 +1,10 @@
+views:
+  - type: table
+    name: "All"
+    order:
+      - file.name
+      - status
+    sort:
+      - column: status
+        direction: asc
+    limit: 100

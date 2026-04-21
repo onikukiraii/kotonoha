@@ -1,0 +1,6 @@
+views:
+  - type: list
+    name: "Simple"
+    order:
+      - file.name
+    limit: 10
