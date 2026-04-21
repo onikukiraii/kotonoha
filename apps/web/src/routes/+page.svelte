@@ -1,7 +1,9 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { FileTree, FuzzySearch, BacklinkPanel, CategoryPicker } from '@kotonoha/ui'
+  import { FileTree, FuzzySearch, BacklinkPanel, CategoryPicker, BaseView, CreateBaseWizard } from '@kotonoha/ui'
   import type { FileNode, SearchResult } from '@kotonoha/types'
+  import type { BaseFile, PropertySchema, QueryResult } from '@kotonoha/base'
+  import { parseBase, serializeBase } from '@kotonoha/base'
   import {
     fileTree,
     currentFilePath,
@@ -11,7 +13,7 @@
     openFile,
   } from '$lib/stores/vault.js'
   import { isDirty, scheduleSave } from '$lib/stores/editor.js'
-  import { searchFiles, searchFullText, openDailyNote, getSubdirs, createLearningLog, createNewFile, deleteFileApi, renameFileApi } from '$lib/api.js'
+  import { searchFiles, searchFullText, openDailyNote, getSubdirs, createLearningLog, createNewFile, deleteFileApi, renameFileApi, runBaseApi, updateBasePropertyApi, getBaseContentApi, saveBaseContentApi, getBaseSchemaApi } from '$lib/api.js'
   import { renderMarkdownClient } from '$lib/markdown.js'
   import { LEARNING_LOGS_DIR } from '@kotonoha/ui/learning-log'
 
@@ -28,6 +30,57 @@
   let renderedHtml = $state('')
   let editorContent = $state('')
   let cursorLine = $state(0)
+
+  let baseResult = $state<QueryResult | null>(null)
+  let baseRawYaml = $state<string | null>(null)
+  let baseError = $state<string | null>(null)
+  let baseAst = $state<BaseFile | null>(null)
+  let baseSchema = $state<PropertySchema | null>(null)
+  let showCreateWizard = $state(false)
+  let saveTimer: ReturnType<typeof setTimeout> | null = null
+  const isBaseFile = $derived($currentFilePath?.endsWith('.base') ?? false)
+  const basePropertyDisplayNames = $derived(buildDisplayNameMap(baseResult))
+
+  function buildDisplayNameMap(_r: QueryResult | null): Record<string, string> {
+    return {}
+  }
+
+  function collectFolders(nodes: FileNode[], acc: string[] = []): string[] {
+    for (const n of nodes) {
+      if (n.is_dir) {
+        acc.push(n.path)
+        if (n.children) collectFolders(n.children, acc)
+      }
+    }
+    return acc
+  }
+
+  async function handleBaseAstChange(next: BaseFile) {
+    baseAst = next
+    const yaml = serializeBase(next)
+    baseRawYaml = yaml
+    if (saveTimer) clearTimeout(saveTimer)
+    saveTimer = setTimeout(async () => {
+      if (!$currentFilePath) return
+      try {
+        await saveBaseContentApi($currentFilePath, yaml)
+        baseResult = await runBaseApi($currentFilePath)
+      } catch (err) {
+        baseError = (err as Error).message
+      }
+    }, 400)
+  }
+
+  async function handleCreateBase(filePath: string, yaml: string) {
+    await createNewFile(filePath, yaml)
+    await loadFileTree()
+    showCreateWizard = false
+    await handleFileSelect({
+      name: filePath.split('/').pop() ?? filePath,
+      path: filePath,
+      is_dir: false,
+    })
+  }
 
   // File creation
   let creating = $state(false)
@@ -136,6 +189,29 @@
 
   async function handleFileSelect(node: FileNode) {
     if (node.is_dir) return
+    if (node.path.endsWith('.base')) {
+      currentFilePath.set(node.path)
+      baseError = null
+      try {
+        const [result, yaml, schema] = await Promise.all([
+          runBaseApi(node.path),
+          getBaseContentApi(node.path),
+          getBaseSchemaApi(null),
+        ])
+        baseResult = result
+        baseRawYaml = yaml
+        baseAst = parseBase(yaml)
+        baseSchema = schema
+      } catch (err) {
+        baseError = (err as Error).message
+        baseResult = null
+        baseRawYaml = null
+        baseAst = null
+        baseSchema = null
+      }
+      mobileTab = 'note'
+      return
+    }
     await openFile(node.path)
     editorContent = $currentFileContent
     renderedHtml = renderMarkdownClient(editorContent)
@@ -224,9 +300,16 @@
       creating = false
       return
     }
+    if (name.endsWith('.base') || name === 'base') {
+      // Open the wizard instead of creating an empty .base
+      showCreateWizard = true
+      creating = false
+      newFileName = ''
+      return
+    }
     const path = name.endsWith('.md') ? name : `${name}.md`
     try {
-      await createNewFile(path)
+      await createNewFile(path, '')
       await loadFileTree()
       await openFile(path)
       editorContent = $currentFileContent
@@ -272,7 +355,7 @@
     showFileActions = false
     renaming = true
     const filename = $currentFilePath?.split('/').pop() ?? ''
-    renameValue = filename.replace(/\.md$/, '')
+    renameValue = filename.replace(/\.(md|base)$/, '')
     requestAnimationFrame(() => {
       renameInputEl?.focus()
       renameInputEl?.select()
@@ -285,7 +368,11 @@
       renaming = false
       return
     }
-    const newName = renameValue.trim().endsWith('.md') ? renameValue.trim() : `${renameValue.trim()}.md`
+    const trimmed = renameValue.trim()
+    const currentExt = oldPath.endsWith('.base') ? '.base' : '.md'
+    const newName = trimmed.endsWith('.md') || trimmed.endsWith('.base')
+      ? trimmed
+      : `${trimmed}${currentExt}`
     const parts = oldPath.split('/')
     parts[parts.length - 1] = newName
     const newPath = parts.join('/')
@@ -355,6 +442,15 @@
   />
 {/if}
 
+{#if showCreateWizard}
+  <CreateBaseWizard
+    folders={collectFolders($fileTree)}
+    loadSchema={(folder) => getBaseSchemaApi(folder)}
+    onCreate={handleCreateBase}
+    onCancel={() => (showCreateWizard = false)}
+  />
+{/if}
+
 <!-- Mobile: 2-pane (files / note) with swipe -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
@@ -389,7 +485,7 @@
             <input
               bind:this={createInputEl}
               bind:value={newFileName}
-              placeholder="filename.md"
+              placeholder="filename.md / reading.base"
               class="create-input"
               onkeydown={handleCreateKeydown}
               onblur={() => { if (!newFileName.trim()) creating = false }}
@@ -420,7 +516,7 @@
           {:else}
             <span class="file-name">{$currentFilePath.split('/').pop()}</span>
           {/if}
-          {#if noteMode === 'editor' && $isDirty}
+          {#if !isBaseFile && noteMode === 'editor' && $isDirty}
             <span class="dirty-indicator">*</span>
           {/if}
           <button class="action-menu-btn" onclick={() => (showFileActions = true)} title="ファイル操作">
@@ -428,20 +524,55 @@
               <circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/>
             </svg>
           </button>
-          <button class="mode-toggle" onclick={toggleNoteMode} title={noteMode === 'editor' ? 'プレビュー' : '編集'}>
-            {#if noteMode === 'editor'}
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
-              </svg>
-            {:else}
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
-              </svg>
-            {/if}
-          </button>
+          {#if !isBaseFile}
+            <button class="mode-toggle" onclick={toggleNoteMode} title={noteMode === 'editor' ? 'プレビュー' : '編集'}>
+              {#if noteMode === 'editor'}
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+                </svg>
+              {:else}
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                </svg>
+              {/if}
+            </button>
+          {/if}
         </div>
 
-        {#if noteMode === 'editor'}
+        {#if isBaseFile}
+          <section class="base-section">
+            {#if baseError}
+              <div class="base-error">.base 実行失敗: {baseError}</div>
+            {:else if baseResult}
+              <BaseView
+                result={baseResult}
+                displayNames={basePropertyDisplayNames}
+                rawYaml={baseRawYaml ?? ''}
+                base={baseAst ?? undefined}
+                schema={baseSchema ?? undefined}
+                onBaseChange={handleBaseAstChange}
+                onRowClick={(row) => handleFileSelect({ name: row.path.split('/').pop() ?? '', path: row.path, is_dir: false })}
+                onCellEdit={async (row, key, value) => {
+                  try {
+                    await updateBasePropertyApi(row.path, key, value)
+                    if ($currentFilePath) baseResult = await runBaseApi($currentFilePath)
+                  } catch (err) {
+                    baseError = (err as Error).message
+                  }
+                }}
+                onSaveYaml={async (yaml) => {
+                  if (!$currentFilePath) return
+                  await saveBaseContentApi($currentFilePath, yaml)
+                  baseRawYaml = yaml
+                  baseAst = parseBase(yaml)
+                  baseResult = await runBaseApi($currentFilePath)
+                }}
+              />
+            {:else}
+              <div class="base-loading">読み込み中...</div>
+            {/if}
+          </section>
+        {:else if noteMode === 'editor'}
           <section class="editor-section">
             {#key $currentFilePath}
               {#await import('@kotonoha/ui').then(m => m.Editor) then Editor}
@@ -672,6 +803,23 @@
     border-top: 1px solid var(--koto-border);
     max-height: 200px;
     overflow-y: auto;
+  }
+
+  .base-section {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .base-error {
+    padding: 16px;
+    color: #f38ba8;
+    font-size: var(--koto-font-size-sm);
+  }
+  .base-loading {
+    padding: 16px;
+    color: var(--koto-text-muted);
   }
 
   .empty-state {
