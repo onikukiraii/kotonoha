@@ -37,6 +37,24 @@ pub fn init_db(vault_path: &str) -> Result<(), String> {
             content,
             tokenize = 'trigram'
         );
+
+        CREATE TABLE IF NOT EXISTS properties (
+            path TEXT NOT NULL,
+            key TEXT NOT NULL,
+            value_text TEXT,
+            value_num REAL,
+            value_type TEXT NOT NULL,
+            PRIMARY KEY (path, key)
+        );
+        CREATE INDEX IF NOT EXISTS idx_properties_key_num ON properties(key, value_num);
+        CREATE INDEX IF NOT EXISTS idx_properties_key_text ON properties(key, value_text);
+
+        CREATE TABLE IF NOT EXISTS bases (
+            path TEXT PRIMARY KEY,
+            raw_yaml TEXT NOT NULL,
+            parsed_json TEXT NOT NULL,
+            mtime INTEGER NOT NULL
+        );
         ",
     )
     .map_err(|e| e.to_string())?;

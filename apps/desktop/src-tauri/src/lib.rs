@@ -1,7 +1,7 @@
 mod commands;
 mod db;
 
-use commands::{fs, git, index, parse, watcher};
+use commands::{base, fs, git, index, parse, watcher};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -41,6 +41,9 @@ pub fn run() {
             // watcher
             watcher::start_watcher,
             watcher::stop_watcher,
+            // base (.base files)
+            base::read_vault_markdown,
+            base::read_base_file,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

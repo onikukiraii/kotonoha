@@ -72,7 +72,11 @@ pub fn open_vault(path: String, app: AppHandle) -> Result<VaultMeta, String> {
     let file_count = WalkDir::new(&vault_path)
         .into_iter()
         .filter_map(|e| e.ok())
-        .filter(|e| e.path().extension().map_or(false, |ext| ext == "md"))
+        .filter(|e| {
+            e.path()
+                .extension()
+                .map_or(false, |ext| ext == "md" || ext == "base")
+        })
         .count() as u32;
 
     let name = vault_path
@@ -111,7 +115,11 @@ pub fn get_vault(app: AppHandle) -> Result<Option<VaultMeta>, String> {
             let file_count = WalkDir::new(&vault_path)
                 .into_iter()
                 .filter_map(|e| e.ok())
-                .filter(|e| e.path().extension().map_or(false, |ext| ext == "md"))
+                .filter(|e| {
+            e.path()
+                .extension()
+                .map_or(false, |ext| ext == "md" || ext == "base")
+        })
                 .count() as u32;
 
             let name = vault_path
@@ -172,7 +180,10 @@ pub fn list_files(vault_path: String) -> Result<Vec<FileNode>, String> {
                         updated_at: None,
                     });
                 }
-            } else if path.extension().map_or(false, |ext| ext == "md") {
+            } else if path
+                .extension()
+                .map_or(false, |ext| ext == "md" || ext == "base")
+            {
                 let metadata = fs::metadata(&path).map_err(|e| e.to_string())?;
                 let updated_at = metadata
                     .modified()
@@ -223,13 +234,17 @@ pub fn write_file(path: String, content: String, vault_path: String) -> Result<u
 }
 
 #[tauri::command]
-pub fn create_file(path: String, vault_path: String) -> Result<(), String> {
+pub fn create_file(
+    path: String,
+    vault_path: String,
+    content: Option<String>,
+) -> Result<(), String> {
     let abs_path = resolve_safe_path(&vault_path, &path)?;
     super::watcher::mark_self_write(abs_path.clone());
     if let Some(parent) = abs_path.parent() {
         fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
-    fs::write(&abs_path, "").map_err(|e| e.to_string())
+    fs::write(&abs_path, content.unwrap_or_default()).map_err(|e| e.to_string())
 }
 
 #[tauri::command]

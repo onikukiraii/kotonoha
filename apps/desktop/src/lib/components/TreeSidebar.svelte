@@ -10,9 +10,10 @@
     focused?: boolean;
     onSelect: (path: string) => void;
     onBlur: () => void;
+    onCreateBase?: () => void;
   }
 
-  let { files, selectedPath, vaultPath, focused = false, onSelect, onBlur }: Props = $props();
+  let { files, selectedPath, vaultPath, focused = false, onSelect, onBlur, onCreateBase }: Props = $props();
 
   interface FlatItem {
     node: FileNode;
@@ -148,11 +149,18 @@
   }
 
   async function handleCreateSubmit() {
-    if (!newFileName.trim()) {
+    const name = newFileName.trim();
+    if (!name) {
       creating = false;
       return;
     }
-    const path = newFileName.endsWith(".md") ? newFileName : `${newFileName}.md`;
+    if (name.endsWith(".base") || name === "base") {
+      creating = false;
+      newFileName = "";
+      onCreateBase?.();
+      return;
+    }
+    const path = name.endsWith(".md") ? name : `${name}.md`;
     await createNewFile(path);
     creating = false;
     newFileName = "";
@@ -268,7 +276,7 @@
       <input
         bind:this={inputElement}
         bind:value={newFileName}
-        placeholder="filename.md"
+        placeholder="filename.md / reading.base"
         class="create-input"
         onkeydown={handleCreateKeydown}
       />

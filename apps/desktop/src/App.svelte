@@ -9,6 +9,12 @@
   import TreeSidebar from "./lib/components/TreeSidebar.svelte";
   import StatusBar from "./lib/components/StatusBar.svelte";
   import VaultSelector from "./lib/components/VaultSelector.svelte";
+  import { BaseView, CreateBaseWizard } from "@kotonoha/ui";
+  import type { BaseFile, PropertySchema, QueryResult, Row } from "@kotonoha/base";
+  import { parseBase, serializeBase } from "@kotonoha/base";
+  import { runBaseFileDesktop, readVaultSchemaDesktop } from "./lib/base";
+  import { invoke } from "@tauri-apps/api/core";
+  import { createNewFile, loadFiles } from "./lib/stores/vault.svelte";
   import {
     getVaultState,
     initVault,
@@ -48,6 +54,98 @@
   let hasVault = $state(false);
   let showLearningPicker = $state(false);
   let learningCategories = $state<string[]>([]);
+  let baseResult = $state<QueryResult | null>(null);
+  let baseRawYaml = $state<string | null>(null);
+  let baseAst = $state<BaseFile | null>(null);
+  let baseSchema = $state<PropertySchema | null>(null);
+  let baseError = $state<string | null>(null);
+  let baseLoadingPath = $state<string | null>(null);
+  let showCreateWizard = $state(false);
+  let saveTimer: ReturnType<typeof setTimeout> | null = null;
+  const activeFilePath = $derived(vault.currentFile);
+  const isBaseFile = $derived(activeFilePath?.endsWith(".base") ?? false);
+
+  $effect(() => {
+    const p = activeFilePath;
+    const vaultPath = vault.meta?.path;
+    if (!p || !p.endsWith(".base") || !vaultPath) {
+      baseResult = null;
+      baseError = null;
+      baseRawYaml = null;
+      baseAst = null;
+      baseSchema = null;
+      baseLoadingPath = null;
+      return;
+    }
+    if (baseLoadingPath === p) return;
+    baseLoadingPath = p;
+    baseResult = null;
+    baseError = null;
+    Promise.all([
+      runBaseFileDesktop(vaultPath, p),
+      invoke<string>("read_base_file", { vaultPath, basePath: p }),
+      readVaultSchemaDesktop(vaultPath, null),
+    ])
+      .then(([r, yaml, schema]) => {
+        if (activeFilePath !== p) return;
+        baseResult = r;
+        baseRawYaml = yaml;
+        baseAst = parseBase(yaml);
+        baseSchema = schema;
+      })
+      .catch((e: Error) => {
+        if (activeFilePath === p) baseError = e.message;
+      });
+  });
+
+  async function handleBaseRowClick(row: Row) {
+    await openTab(row.path);
+  }
+
+  function collectFolders(nodes: import("@kotonoha/types").FileNode[], acc: string[] = []): string[] {
+    for (const n of nodes) {
+      if (n.is_dir) {
+        acc.push(n.path);
+        if (n.children) collectFolders(n.children, acc);
+      }
+    }
+    return acc;
+  }
+
+  async function handleBaseAstChange(next: BaseFile) {
+    baseAst = next;
+    const yaml = serializeBase(next);
+    baseRawYaml = yaml;
+    if (saveTimer) clearTimeout(saveTimer);
+    saveTimer = setTimeout(async () => {
+      const p = activeFilePath;
+      const vaultPath = vault.meta?.path;
+      if (!p || !vaultPath) return;
+      try {
+        await invoke("write_file", { path: p, content: yaml, vaultPath });
+        baseResult = await runBaseFileDesktop(vaultPath, p);
+      } catch (err) {
+        baseError = (err as Error).message;
+      }
+    }, 400);
+  }
+
+  async function handleSaveYaml(yaml: string) {
+    const p = activeFilePath;
+    const vaultPath = vault.meta?.path;
+    if (!p || !vaultPath) return;
+    await invoke("write_file", { path: p, content: yaml, vaultPath });
+    baseRawYaml = yaml;
+    baseAst = parseBase(yaml);
+    baseResult = await runBaseFileDesktop(vaultPath, p);
+  }
+
+  async function handleCreateBase(filePath: string, yaml: string) {
+    await createNewFile(filePath, yaml);
+    await loadFiles();
+    showCreateWizard = false;
+    await openTab(filePath);
+  }
 
   onMount(() => {
     (async () => {
@@ -210,6 +308,7 @@
           focused={editor.treeSidebarFocused}
           onSelect={handleFileSelect}
           onBlur={blurTreeSidebar}
+          onCreateBase={() => (showCreateWizard = true)}
         />
       </div>
     {/if}
@@ -227,18 +326,36 @@
         <div class="panes">
           <div class="editor-pane">
             {#key vault.currentFile}
-              <EditorPane
-                content={vault.fileContent}
-                contentVersion={vault.fileContentVersion}
-                filePath={vault.currentFile}
-                vaultPath={vault.meta?.path ?? ""}
-                onCursorLineChange={() => {}}
-                onWikilinkNavigate={handleWikilinkNavigate}
-              />
+              {#if isBaseFile}
+                {#if baseError}
+                  <div class="base-error">.base 実行失敗: {baseError}</div>
+                {:else if baseResult}
+                  <BaseView
+                    result={baseResult}
+                    rawYaml={baseRawYaml ?? ""}
+                    base={baseAst ?? undefined}
+                    schema={baseSchema ?? undefined}
+                    onBaseChange={handleBaseAstChange}
+                    onSaveYaml={handleSaveYaml}
+                    onRowClick={handleBaseRowClick}
+                  />
+                {:else}
+                  <div class="base-loading">読み込み中...</div>
+                {/if}
+              {:else}
+                <EditorPane
+                  content={vault.fileContent}
+                  contentVersion={vault.fileContentVersion}
+                  filePath={vault.currentFile}
+                  vaultPath={vault.meta?.path ?? ""}
+                  onCursorLineChange={() => {}}
+                  onWikilinkNavigate={handleWikilinkNavigate}
+                />
+              {/if}
             {/key}
           </div>
 
-          {#if editor.showBacklinks}
+          {#if editor.showBacklinks && !isBaseFile}
             <div class="backlinks-area">
               <BacklinkPanel
                 filePath={vault.currentFile}
@@ -280,6 +397,15 @@
       categories={learningCategories}
       onSelect={handleLearningCategorySelect}
       onClose={() => (showLearningPicker = false)}
+    />
+  {/if}
+
+  {#if showCreateWizard && vault.meta}
+    <CreateBaseWizard
+      folders={collectFolders(vault.fileTree)}
+      loadSchema={(folder) => readVaultSchemaDesktop(vault.meta!.path, folder)}
+      onCreate={handleCreateBase}
+      onCancel={() => (showCreateWizard = false)}
     />
   {/if}
 {/if}
@@ -351,5 +477,15 @@
     border-radius: 3px;
     font-family: var(--font-mono);
     font-size: 11px;
+  }
+
+  .base-error {
+    padding: 16px;
+    color: #f38ba8;
+    font-size: 13px;
+  }
+  .base-loading {
+    padding: 16px;
+    color: var(--text-muted);
   }
 </style>

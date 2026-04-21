@@ -120,9 +120,9 @@ export async function saveFile(
   return mtime;
 }
 
-export async function createNewFile(path: string): Promise<void> {
+export async function createNewFile(path: string, content?: string): Promise<void> {
   if (!vaultMeta) return;
-  await invoke("create_file", { path, vaultPath: vaultMeta.path });
+  await invoke("create_file", { path, vaultPath: vaultMeta.path, content });
   await loadFiles();
   const { openTab } = await import("./tabs.svelte");
   await openTab(path);
