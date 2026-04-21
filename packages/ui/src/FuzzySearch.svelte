@@ -72,6 +72,7 @@
         scrollToSelected()
         break
       case 'Enter':
+        if (event.isComposing || event.keyCode === 229) break
         event.preventDefault()
         if (results[selectedIndex]) {
           onSelect(results[selectedIndex])
