@@ -22,11 +22,20 @@
   let editorElement: HTMLDivElement;
   let view: any = null;
   let livePreviewCompartment: any = null;
+  let lineNumbersCompartment: any = null;
+  let lineNumbersFn: any = null;
   let saveTimer: ReturnType<typeof setTimeout> | null = null;
 
   function getLivePreviewExtensions(enabled: boolean) {
     if (enabled) {
       return livePreview({ onWikilinkClick: onWikilinkNavigate, onLinkClick: (url: string) => openUrl(url) });
+    }
+    return [];
+  }
+
+  function getLineNumbersExtensions(enabled: boolean) {
+    if (enabled && lineNumbersFn) {
+      return lineNumbersFn();
     }
     return [];
   }
@@ -111,15 +120,17 @@
       },
     ]);
 
-    // Create compartment for live preview extensions (allows dynamic reconfigure)
+    // Create compartments so extensions can be reconfigured without recreating the editor
     livePreviewCompartment = new Compartment();
+    lineNumbersCompartment = new Compartment();
+    lineNumbersFn = lineNumbers;
 
     const extensions = [
       vim(),
       drawSelection(),
       emacsKeys,
       keymap.of([indentWithTab]),
-      lineNumbers(),
+      lineNumbersCompartment.of(getLineNumbersExtensions(!useLivePreview)),
       history(),
       keymap.of([...defaultKeymap, ...historyKeymap]),
       markdown({ base: markdownLanguage, codeLanguages: languages }),
@@ -188,9 +199,12 @@
   // React to livePreview toggle — reconfigure extensions without destroying the editor
   $effect(() => {
     const lp = editor.livePreviewEnabled;
-    if (view && livePreviewCompartment) {
+    if (view && livePreviewCompartment && lineNumbersCompartment) {
       view.dispatch({
-        effects: livePreviewCompartment.reconfigure(getLivePreviewExtensions(lp)),
+        effects: [
+          livePreviewCompartment.reconfigure(getLivePreviewExtensions(lp)),
+          lineNumbersCompartment.reconfigure(getLineNumbersExtensions(!lp)),
+        ],
       });
     }
   });
