@@ -8,6 +8,7 @@
   import GitPanel from "./lib/components/GitPanel.svelte";
   import TreeSidebar from "./lib/components/TreeSidebar.svelte";
   import StatusBar from "./lib/components/StatusBar.svelte";
+  import Toast from "./lib/components/Toast.svelte";
   import VaultSelector from "./lib/components/VaultSelector.svelte";
   import { BaseView, CreateBaseWizard } from "@kotonoha/ui";
   import type { BaseFile, PropertySchema, QueryResult, Row } from "@kotonoha/base";
@@ -45,6 +46,7 @@
   } from "./lib/stores/tabs.svelte";
   import { startGitPolling, stopGitPolling } from "./lib/stores/git.svelte";
   import { startWatcher, stopWatcher } from "./lib/stores/watcher.svelte";
+  import { showToast } from "./lib/stores/toast.svelte";
 
   const vault = getVaultState();
   const editor = getEditorState();
@@ -284,7 +286,7 @@
       toggleTreeSidebar();
     } else if (meta && e.key === "r") {
       e.preventDefault();
-      reloadVault();
+      reloadVault().then(() => showToast("再読込しました"));
     }
   }
 </script>
@@ -380,6 +382,8 @@
   </div>
 
   <StatusBar vaultPath={vault.meta?.path ?? ""} />
+
+  <Toast />
 
   {#if editor.showFuzzySearch}
     <FuzzySearchModal
