@@ -6,7 +6,13 @@ import {
   type ViewUpdate,
   type DecorationSet,
 } from '@codemirror/view'
-import { type Extension, type EditorState, Prec, RangeSetBuilder } from '@codemirror/state'
+import {
+  type Extension,
+  type EditorState,
+  Prec,
+  RangeSetBuilder,
+  StateField,
+} from '@codemirror/state'
 import { syntaxTree } from '@codemirror/language'
 
 export interface LivePreviewOptions {
@@ -398,6 +404,9 @@ function buildDecorations(
         }
 
         // --- FencedCode ---
+        // Mermaid block is handled by the block-decoration StateField.
+        // Here we only apply codeblock styling for non-mermaid blocks (or
+        // when the cursor is on a mermaid block).
         if (type === 'FencedCode') {
           // Detect language from CodeInfo child
           let language = ''
@@ -413,34 +422,9 @@ function buildDecorations(
             }
           }
 
-          // Mermaid block: hide all lines and insert SVG widget when cursor is outside
+          // Mermaid + cursor outside: skip here (handled by StateField)
           if (language === 'mermaid' && !onCursor) {
-            const fullText = state.doc.sliceString(node.from, node.to)
-            const lines = fullText.split('\n')
-            const mermaidSource = lines.slice(1, -1).join('\n').trim()
-            if (mermaidSource) {
-              // Hide each line individually (ViewPlugin cannot replace across line breaks)
-              const startLine = state.doc.lineAt(node.from)
-              const endLine = state.doc.lineAt(node.to)
-              for (let ln = startLine.number; ln <= endLine.number; ln++) {
-                const line = state.doc.line(ln)
-                entries.push({
-                  from: line.from,
-                  to: line.to,
-                  deco: Decoration.replace({}),
-                })
-              }
-              // Insert widget at the start of the first line
-              entries.push({
-                from: node.from,
-                to: node.from,
-                deco: Decoration.widget({
-                  widget: new MermaidWidget(mermaidSource, viewRef),
-                  side: 1,
-                }),
-              })
-              return false
-            }
+            return false
           }
 
           // Non-mermaid (or cursor on mermaid): hide ``` marks, apply codeblock style
@@ -468,29 +452,8 @@ function buildDecorations(
           return false // don't descend
         }
 
-        // --- Table (GFM) ---
+        // --- Table (GFM) is handled by the block-decoration StateField ---
         if (type === 'Table') {
-          if (!onCursor) {
-            const startLine = state.doc.lineAt(node.from)
-            const endLine = state.doc.lineAt(node.to)
-            const fullText = state.doc.sliceString(startLine.from, endLine.to)
-            for (let ln = startLine.number; ln <= endLine.number; ln++) {
-              const line = state.doc.line(ln)
-              entries.push({
-                from: line.from,
-                to: line.to,
-                deco: Decoration.replace({}),
-              })
-            }
-            entries.push({
-              from: startLine.from,
-              to: startLine.from,
-              deco: Decoration.widget({
-                widget: new TableWidget(fullText),
-                side: -1,
-              }),
-            })
-          }
           return false
         }
 
@@ -723,6 +686,87 @@ function buildDecorations(
   return builder.finish()
 }
 
+// --- Block decorations (Table, Mermaid) ---
+//
+// These must come from a StateField because they span multiple lines, which
+// requires `block: true` replace decorations — and CodeMirror 6 disallows
+// block decorations from ViewPlugins (they affect line heights, which are
+// computed before plugin decorations).
+
+function buildBlockDecorations(
+  state: EditorState,
+  viewRef: { current: EditorView | null },
+): DecorationSet {
+  const cursorLines = getCursorLines(state)
+  const entries: DecoEntry[] = []
+  const tree = syntaxTree(state)
+
+  tree.iterate({
+    enter(node) {
+      const type = node.type.name
+      if (type !== 'Table' && type !== 'FencedCode') return
+
+      const nodeFromLine = state.doc.lineAt(node.from).number
+      const nodeToLine = state.doc.lineAt(node.to).number
+      const onCursor = rangeOverlapsCursorLines(nodeFromLine, nodeToLine, cursorLines)
+      if (onCursor) return false
+
+      if (type === 'Table') {
+        const startLine = state.doc.lineAt(node.from)
+        const endLine = state.doc.lineAt(node.to)
+        const fullText = state.doc.sliceString(startLine.from, endLine.to)
+        entries.push({
+          from: startLine.from,
+          to: endLine.to,
+          deco: Decoration.replace({
+            widget: new TableWidget(fullText),
+            block: true,
+          }),
+        })
+        return false
+      }
+
+      if (type === 'FencedCode') {
+        let language = ''
+        const n = node.node
+        let c = n.cursor()
+        if (c.firstChild()) {
+          do {
+            if (c.type.name === 'CodeInfo') {
+              language = state.doc.sliceString(c.from, c.to).trim().toLowerCase()
+            }
+          } while (c.nextSibling())
+        }
+        if (language !== 'mermaid') return false
+
+        const fullText = state.doc.sliceString(node.from, node.to)
+        const lines = fullText.split('\n')
+        const mermaidSource = lines.slice(1, -1).join('\n').trim()
+        if (!mermaidSource) return false
+
+        const startLine = state.doc.lineAt(node.from)
+        const endLine = state.doc.lineAt(node.to)
+        entries.push({
+          from: startLine.from,
+          to: endLine.to,
+          deco: Decoration.replace({
+            widget: new MermaidWidget(mermaidSource, viewRef),
+            block: true,
+          }),
+        })
+        return false
+      }
+    },
+  })
+
+  entries.sort((a, b) => a.from - b.from)
+  const builder = new RangeSetBuilder<Decoration>()
+  for (const entry of entries) {
+    builder.add(entry.from, entry.to, entry.deco)
+  }
+  return builder.finish()
+}
+
 // --- Theme ---
 
 const livePreviewTheme = EditorView.theme(
@@ -885,24 +929,41 @@ function livePreviewClickHandler(options: LivePreviewOptions): Extension {
 // --- Main export ---
 
 export function livePreview(options: LivePreviewOptions = {}): Extension[] {
+  // Shared between the block StateField and the inline ViewPlugin so the
+  // Mermaid widget can reach back to the view for layout measurement.
+  const viewRef: { current: EditorView | null } = { current: null }
+
+  const blockField = StateField.define<DecorationSet>({
+    create(state) {
+      return buildBlockDecorations(state, viewRef)
+    },
+    update(deco, tr) {
+      const selectionChanged = !tr.startState.selection.eq(tr.state.selection)
+      if (tr.docChanged || selectionChanged) {
+        return buildBlockDecorations(tr.state, viewRef)
+      }
+      return deco
+    },
+    provide: (f) => EditorView.decorations.from(f),
+  })
+
   const plugin = ViewPlugin.fromClass(
     class {
       decorations: DecorationSet
-      viewRef: { current: EditorView | null } = { current: null }
 
       constructor(view: EditorView) {
-        this.viewRef.current = view
-        this.decorations = buildDecorations(view, options, this.viewRef)
+        viewRef.current = view
+        this.decorations = buildDecorations(view, options, viewRef)
       }
 
       update(update: ViewUpdate) {
-        this.viewRef.current = update.view
+        viewRef.current = update.view
         if (
           update.docChanged ||
           update.viewportChanged ||
           update.selectionSet
         ) {
-          this.decorations = buildDecorations(update.view, options, this.viewRef)
+          this.decorations = buildDecorations(update.view, options, viewRef)
         }
       }
     },
@@ -911,5 +972,5 @@ export function livePreview(options: LivePreviewOptions = {}): Extension[] {
     },
   )
 
-  return [plugin, livePreviewTheme, livePreviewClickHandler(options)]
+  return [blockField, plugin, livePreviewTheme, livePreviewClickHandler(options)]
 }
