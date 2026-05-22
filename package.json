@@ -2,6 +2,7 @@
   "name": "kotonoha",
   "private": true,
   "type": "module",
+  "packageManager": "pnpm@9.15.4",
   "scripts": {
     "dev:web": "pnpm --filter @kotonoha/web dev",
     "dev:desktop": "pnpm --filter @kotonoha/desktop tauri dev",
