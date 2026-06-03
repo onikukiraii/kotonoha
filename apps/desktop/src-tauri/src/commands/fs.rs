@@ -75,7 +75,7 @@ pub fn open_vault(path: String, app: AppHandle) -> Result<VaultMeta, String> {
         .filter(|e| {
             e.path()
                 .extension()
-                .map_or(false, |ext| ext == "md" || ext == "base")
+                .map_or(false, |ext| ext == "md" || ext == "base" || ext == "html")
         })
         .count() as u32;
 
@@ -118,7 +118,7 @@ pub fn get_vault(app: AppHandle) -> Result<Option<VaultMeta>, String> {
                 .filter(|e| {
             e.path()
                 .extension()
-                .map_or(false, |ext| ext == "md" || ext == "base")
+                .map_or(false, |ext| ext == "md" || ext == "base" || ext == "html")
         })
                 .count() as u32;
 
@@ -182,7 +182,7 @@ pub fn list_files(vault_path: String) -> Result<Vec<FileNode>, String> {
                 }
             } else if path
                 .extension()
-                .map_or(false, |ext| ext == "md" || ext == "base")
+                .map_or(false, |ext| ext == "md" || ext == "base" || ext == "html")
             {
                 let metadata = fs::metadata(&path).map_err(|e| e.to_string())?;
                 let updated_at = metadata

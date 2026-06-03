@@ -140,7 +140,7 @@
   }
 
   function displayName(name: string, isDir: boolean): string {
-    return isDir ? name : name.replace(/\.md$/, "");
+    return isDir ? name : name.replace(/\.(md|html)$/, "");
   }
 
   function scrollIntoView() {

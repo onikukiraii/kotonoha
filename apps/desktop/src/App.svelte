@@ -10,7 +10,7 @@
   import StatusBar from "./lib/components/StatusBar.svelte";
   import Toast from "./lib/components/Toast.svelte";
   import VaultSelector from "./lib/components/VaultSelector.svelte";
-  import { BaseView, CreateBaseWizard } from "@kotonoha/ui";
+  import { BaseView, CreateBaseWizard, HtmlViewer } from "@kotonoha/ui";
   import type { BaseFile, PropertySchema, QueryResult, Row } from "@kotonoha/base";
   import { parseBase, serializeBase } from "@kotonoha/base";
   import { runBaseFileDesktop, readVaultSchemaDesktop } from "./lib/base";
@@ -66,6 +66,7 @@
   let saveTimer: ReturnType<typeof setTimeout> | null = null;
   const activeFilePath = $derived(vault.currentFile);
   const isBaseFile = $derived(activeFilePath?.endsWith(".base") ?? false);
+  const isHtmlFile = $derived(activeFilePath?.endsWith(".html") ?? false);
 
   $effect(() => {
     const p = activeFilePath;
@@ -197,11 +198,9 @@
   }
 
   async function handleWikilinkNavigate(target: string) {
-    const name = target.endsWith(".md") ? target : `${target}.md`;
-
     function findFile(nodes: import("@kotonoha/types").FileNode[], search: string): string | null {
       for (const node of nodes) {
-        if (!node.is_dir && (node.name === search || node.path === search)) {
+        if (!node.is_dir && (node.name === search || node.name === `${search}.md` || node.name === `${search}.html` || node.path === search)) {
           return node.path;
         }
         if (node.is_dir && node.children) {
@@ -212,7 +211,7 @@
       return null;
     }
 
-    const filePath = findFile(vault.fileTree, name);
+    const filePath = findFile(vault.fileTree, target);
     if (filePath) {
       await openTab(filePath);
     }
@@ -344,6 +343,8 @@
                 {:else}
                   <div class="base-loading">読み込み中...</div>
                 {/if}
+              {:else if isHtmlFile}
+                <HtmlViewer html={vault.fileContent} />
               {:else}
                 <EditorPane
                   content={vault.fileContent}
@@ -357,7 +358,7 @@
             {/key}
           </div>
 
-          {#if editor.showBacklinks && !isBaseFile}
+          {#if editor.showBacklinks && !isBaseFile && !isHtmlFile}
             <div class="backlinks-area">
               <BacklinkPanel
                 filePath={vault.currentFile}

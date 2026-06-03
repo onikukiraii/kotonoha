@@ -3,7 +3,7 @@ import { stat } from 'fs/promises'
 import type { FileNode } from '@kotonoha/types'
 import { getFileTree, readFileContent, resolveSafePath } from './vault.js'
 import { getDb, deleteFileRecord, getAllFiles } from '$lib/db/index.js'
-import { indexMarkdownContent, indexBaseContent } from './indexer-core.js'
+import { indexMarkdownContent, indexBaseContent, indexHtmlContent } from './indexer-core.js'
 
 function flattenFiles(nodes: FileNode[]): FileNode[] {
   const result: FileNode[] = []
@@ -59,6 +59,8 @@ export async function updateFileIndex(filePath: string, content: string): Promis
   const db = getDb()
   if (filePath.endsWith('.base')) {
     indexBaseContent(db, filePath, content, fileStat.mtimeMs)
+  } else if (filePath.endsWith('.html')) {
+    indexHtmlContent(db, filePath, content, fileStat.mtimeMs)
   } else {
     indexMarkdownContent(db, filePath, content, fileStat.mtimeMs)
   }

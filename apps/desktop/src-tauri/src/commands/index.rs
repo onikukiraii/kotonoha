@@ -2,9 +2,18 @@ use crate::commands::parse::{extract_tags, extract_wikilinks};
 use crate::db::with_db;
 use nucleo_matcher::pattern::{AtomKind, CaseMatching, Normalization, Pattern};
 use nucleo_matcher::{Config, Matcher};
+use regex::Regex;
 use serde::Serialize;
 use std::fs;
+use std::sync::LazyLock;
 use walkdir::WalkDir;
+
+static HTML_TAG_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"<[^>]*>").unwrap());
+
+fn strip_html_tags(html: &str) -> String {
+    let text = HTML_TAG_RE.replace_all(html, " ");
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
+}
 
 #[derive(Serialize, Clone)]
 pub struct SearchResult {
@@ -26,7 +35,7 @@ pub fn build_index(vault_path: String) -> Result<(), String> {
     let files: Vec<(String, String, String, u64)> = WalkDir::new(&vault)
         .into_iter()
         .filter_map(|e| e.ok())
-        .filter(|e| e.path().extension().map_or(false, |ext| ext == "md"))
+        .filter(|e| e.path().extension().map_or(false, |ext| ext == "md" || ext == "html"))
         .filter_map(|e| {
             let path = e
                 .path()
@@ -69,30 +78,35 @@ pub fn build_index(vault_path: String) -> Result<(), String> {
             )
             .map_err(|e| e.to_string())?;
 
-            // Links
-            let links = extract_wikilinks(content);
-            for target in &links {
-                conn.execute(
-                    "INSERT OR IGNORE INTO links (source_path, target) VALUES (?1, ?2)",
-                    rusqlite::params![path, target],
-                )
-                .map_err(|e| e.to_string())?;
-            }
+            let is_html = path.ends_with(".html");
 
-            // Tags
-            let tags = extract_tags(content);
-            for tag in &tags {
-                conn.execute(
-                    "INSERT OR IGNORE INTO tags (path, tag) VALUES (?1, ?2)",
-                    rusqlite::params![path, tag],
-                )
-                .map_err(|e| e.to_string())?;
+            if !is_html {
+                // Links
+                let links = extract_wikilinks(content);
+                for target in &links {
+                    conn.execute(
+                        "INSERT OR IGNORE INTO links (source_path, target) VALUES (?1, ?2)",
+                        rusqlite::params![path, target],
+                    )
+                    .map_err(|e| e.to_string())?;
+                }
+
+                // Tags
+                let tags = extract_tags(content);
+                for tag in &tags {
+                    conn.execute(
+                        "INSERT OR IGNORE INTO tags (path, tag) VALUES (?1, ?2)",
+                        rusqlite::params![path, tag],
+                    )
+                    .map_err(|e| e.to_string())?;
+                }
             }
 
             // FTS
+            let fts_content = if is_html { strip_html_tags(content) } else { content.to_string() };
             conn.execute(
                 "INSERT INTO fts (path, content) VALUES (?1, ?2)",
-                rusqlite::params![path, content],
+                rusqlite::params![path, fts_content],
             )
             .map_err(|e| e.to_string())?;
         }
@@ -110,7 +124,7 @@ pub fn build_differential_index(vault_path: String) -> Result<(), String> {
     let disk_files: Vec<(String, String, u64)> = WalkDir::new(&vault)
         .into_iter()
         .filter_map(|e| e.ok())
-        .filter(|e| e.path().extension().map_or(false, |ext| ext == "md"))
+        .filter(|e| e.path().extension().map_or(false, |ext| ext == "md" || ext == "html"))
         .filter_map(|e| {
             let path = e
                 .path()
@@ -209,28 +223,33 @@ fn upsert_file_index(
     )
     .map_err(|e| e.to_string())?;
 
-    // Links
-    for target in extract_wikilinks(content) {
-        conn.execute(
-            "INSERT OR IGNORE INTO links (source_path, target) VALUES (?1, ?2)",
-            rusqlite::params![path, target],
-        )
-        .map_err(|e| e.to_string())?;
-    }
+    let is_html = path.ends_with(".html");
 
-    // Tags
-    for tag in extract_tags(content) {
-        conn.execute(
-            "INSERT OR IGNORE INTO tags (path, tag) VALUES (?1, ?2)",
-            rusqlite::params![path, tag],
-        )
-        .map_err(|e| e.to_string())?;
+    if !is_html {
+        // Links
+        for target in extract_wikilinks(content) {
+            conn.execute(
+                "INSERT OR IGNORE INTO links (source_path, target) VALUES (?1, ?2)",
+                rusqlite::params![path, target],
+            )
+            .map_err(|e| e.to_string())?;
+        }
+
+        // Tags
+        for tag in extract_tags(content) {
+            conn.execute(
+                "INSERT OR IGNORE INTO tags (path, tag) VALUES (?1, ?2)",
+                rusqlite::params![path, tag],
+            )
+            .map_err(|e| e.to_string())?;
+        }
     }
 
     // FTS
+    let fts_content = if is_html { strip_html_tags(content) } else { content.to_string() };
     conn.execute(
         "INSERT INTO fts (path, content) VALUES (?1, ?2)",
-        rusqlite::params![path, content],
+        rusqlite::params![path, fts_content],
     )
     .map_err(|e| e.to_string())?;
 

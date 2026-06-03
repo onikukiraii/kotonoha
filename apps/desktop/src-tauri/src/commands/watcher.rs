@@ -52,8 +52,7 @@ fn should_ignore(rel: &str, path: &PathBuf) -> bool {
     if path.is_dir() {
         return false;
     }
-    // Only watch .md files
-    path.extension().map_or(true, |ext| ext != "md")
+    path.extension().map_or(true, |ext| ext != "md" && ext != "html")
 }
 
 fn stop_watcher_internal() -> Result<(), String> {

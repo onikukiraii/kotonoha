@@ -39,6 +39,7 @@
   let showCreateWizard = $state(false)
   let saveTimer: ReturnType<typeof setTimeout> | null = null
   const isBaseFile = $derived($currentFilePath?.endsWith('.base') ?? false)
+  const isHtmlFile = $derived($currentFilePath?.endsWith('.html') ?? false)
   const basePropertyDisplayNames = $derived(buildDisplayNameMap(baseResult))
 
   function buildDisplayNameMap(_r: QueryResult | null): Record<string, string> {
@@ -212,6 +213,12 @@
       mobileTab = 'note'
       return
     }
+    if (node.path.endsWith('.html')) {
+      await openFile(node.path)
+      mobileTab = 'note'
+      noteMode = 'preview'
+      return
+    }
     await openFile(node.path)
     editorContent = $currentFileContent
     renderedHtml = renderMarkdownClient(editorContent)
@@ -245,7 +252,7 @@
   async function handleWikilinkClick(target: string) {
     function findFile(nodes: FileNode[], name: string): FileNode | null {
       for (const node of nodes) {
-        if (!node.is_dir && (node.name === name || node.name === `${name}.md`)) {
+        if (!node.is_dir && (node.name === name || node.name === `${name}.md` || node.name === `${name}.html`)) {
           return node
         }
         if (node.is_dir && node.children) {
@@ -258,9 +265,7 @@
 
     const file = findFile($fileTree, target)
     if (file) {
-      await openFile(file.path)
-      editorContent = $currentFileContent
-      renderedHtml = renderMarkdownClient(editorContent)
+      await handleFileSelect(file)
     }
   }
 
@@ -355,7 +360,7 @@
     showFileActions = false
     renaming = true
     const filename = $currentFilePath?.split('/').pop() ?? ''
-    renameValue = filename.replace(/\.(md|base)$/, '')
+    renameValue = filename.replace(/\.(md|base|html)$/, '')
     requestAnimationFrame(() => {
       renameInputEl?.focus()
       renameInputEl?.select()
@@ -369,7 +374,7 @@
       return
     }
     const trimmed = renameValue.trim()
-    const currentExt = oldPath.endsWith('.base') ? '.base' : '.md'
+    const currentExt = oldPath.endsWith('.base') ? '.base' : oldPath.endsWith('.html') ? '.html' : '.md'
     const newName = trimmed.endsWith('.md') || trimmed.endsWith('.base')
       ? trimmed
       : `${trimmed}${currentExt}`
@@ -516,7 +521,7 @@
           {:else}
             <span class="file-name">{$currentFilePath.split('/').pop()}</span>
           {/if}
-          {#if !isBaseFile && noteMode === 'editor' && $isDirty}
+          {#if !isBaseFile && !isHtmlFile && noteMode === 'editor' && $isDirty}
             <span class="dirty-indicator">*</span>
           {/if}
           <button class="action-menu-btn" onclick={() => (showFileActions = true)} title="ファイル操作">
@@ -524,7 +529,7 @@
               <circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/>
             </svg>
           </button>
-          {#if !isBaseFile}
+          {#if !isBaseFile && !isHtmlFile}
             <button class="mode-toggle" onclick={toggleNoteMode} title={noteMode === 'editor' ? 'プレビュー' : '編集'}>
               {#if noteMode === 'editor'}
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -571,6 +576,12 @@
             {:else}
               <div class="base-loading">読み込み中...</div>
             {/if}
+          </section>
+        {:else if isHtmlFile}
+          <section class="preview-section">
+            {#await import('@kotonoha/ui').then(m => m.HtmlViewer) then HtmlViewer}
+              <svelte:component this={HtmlViewer} html={$currentFileContent} />
+            {/await}
           </section>
         {:else if noteMode === 'editor'}
           <section class="editor-section">

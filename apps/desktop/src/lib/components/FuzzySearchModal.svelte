@@ -204,12 +204,19 @@
       try {
         const content = await invoke<string>("read_file", { path, vaultPath });
         if (cursorFilePath !== path) return;
-        const html = await invoke<string>("render_markdown", { content, vaultPath });
-        if (cursorFilePath !== path) return;
-        previewHtml = DOMPurify.sanitize(html, {
-          ADD_TAGS: ["mark"],
-          ADD_ATTR: ["data-target", "data-source-line", "class"],
-        });
+        if (path.endsWith(".html")) {
+          previewHtml = DOMPurify.sanitize(content, {
+            WHOLE_DOCUMENT: true,
+            ADD_TAGS: ["style"],
+          });
+        } else {
+          const html = await invoke<string>("render_markdown", { content, vaultPath });
+          if (cursorFilePath !== path) return;
+          previewHtml = DOMPurify.sanitize(html, {
+            ADD_TAGS: ["mark"],
+            ADD_ATTR: ["data-target", "data-source-line", "class"],
+          });
+        }
         previewPath = path;
       } catch {
         previewHtml = "";

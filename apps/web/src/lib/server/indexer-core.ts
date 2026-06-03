@@ -52,3 +52,24 @@ export function indexBaseContent(
   const parsed = parseBase(yaml)
   upsertBaseFile(db, filePath, yaml, JSON.stringify(parsed), mtime)
 }
+
+export function indexHtmlContent(
+  db: Database.Database,
+  filePath: string,
+  content: string,
+  mtime: number,
+): void {
+  const filename = path.basename(filePath)
+  const textContent = content.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
+
+  const tx = db.transaction(() => {
+    db.prepare(
+      `INSERT INTO files (path, filename, updated_at) VALUES (?, ?, ?)
+       ON CONFLICT(path) DO UPDATE SET filename = excluded.filename, updated_at = excluded.updated_at`,
+    ).run(filePath, filename, mtime)
+
+    db.prepare('DELETE FROM fts WHERE path = ?').run(filePath)
+    db.prepare('INSERT INTO fts (path, content) VALUES (?, ?)').run(filePath, textContent)
+  })
+  tx()
+}
