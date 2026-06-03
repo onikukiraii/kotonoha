@@ -26,8 +26,9 @@ function getAuthUrl(): string {
 }
 
 async function configureGitUser(): Promise<void> {
-  await simpleGit().raw(['config', '--global', 'user.name', env.GIT_USER_NAME])
-  await simpleGit().raw(['config', '--global', 'user.email', env.GIT_USER_EMAIL])
+  const git = getGit()
+  await git.raw(['config', 'user.name', env.GIT_USER_NAME])
+  await git.raw(['config', 'user.email', env.GIT_USER_EMAIL])
 }
 
 /**
