@@ -14,6 +14,8 @@
     ADD_ATTR: ['style', 'class', 'id', 'target', 'rel'],
   }
 
+  const responsiveMeta = `<meta name="viewport" content="width=device-width, initial-scale=1"><style>img,video,iframe{max-width:100%;height:auto}table{display:block;overflow-x:auto;max-width:100%}*{box-sizing:border-box}body{overflow-wrap:break-word}</style>`
+
   const anchorHandlerScript = `<script>
 document.addEventListener('click', function(e) {
   var a = e.target.closest('a[href^="#"]');
@@ -26,7 +28,13 @@ document.addEventListener('click', function(e) {
 });
 <\/script>`
 
-  let sanitizedHtml = $derived(DOMPurify.sanitize(html, sanitizeConfig) + anchorHandlerScript)
+  let sanitizedHtml = $derived.by(() => {
+    const clean = DOMPurify.sanitize(html, sanitizeConfig)
+    const withMeta = clean.includes('<head>')
+      ? clean.replace('<head>', `<head>${responsiveMeta}`)
+      : responsiveMeta + clean
+    return withMeta + anchorHandlerScript
+  })
 </script>
 
 <div class="html-viewer">
