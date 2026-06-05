@@ -5,7 +5,7 @@ services:
       dockerfile: Dockerfile
       target: base
     ports:
-      - "3003:5173"
+      - "57219:57219"
     volumes:
       - ./packages:/app/packages
       - ./apps/web:/app/apps/web
