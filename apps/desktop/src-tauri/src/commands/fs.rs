@@ -59,6 +59,11 @@ fn resolve_safe_path(vault_path: &str, requested: &str) -> Result<PathBuf, Strin
     if !canonical.starts_with(&vault) {
         return Err("Path traversal detected".to_string());
     }
+    // "" や "." や "a/.." は vault ルートに解決される。
+    // 削除が vault ごと消せてしまうので、ここで弾く
+    if canonical == vault {
+        return Err("Vault root is not a valid target".to_string());
+    }
     Ok(canonical)
 }
 
@@ -322,4 +327,58 @@ pub fn list_subdirs(dir_path: String, vault_path: String) -> Result<Vec<String>,
     }
     dirs.sort();
     Ok(dirs)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::resolve_safe_path;
+    use std::fs;
+
+    struct TempVault(std::path::PathBuf);
+
+    impl TempVault {
+        fn new(name: &str) -> Self {
+            let dir = std::env::temp_dir().join(format!("kotonoha-fs-{name}-{}", std::process::id()));
+            fs::create_dir_all(dir.join("sub")).unwrap();
+            fs::write(dir.join("note.md"), "x").unwrap();
+            Self(dir)
+        }
+
+        fn path(&self) -> &str {
+            self.0.to_str().unwrap()
+        }
+    }
+
+    impl Drop for TempVault {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+
+    #[test]
+    fn rejects_paths_resolving_to_vault_root() {
+        let vault = TempVault::new("root");
+        for requested in ["", ".", "sub/..", "./."] {
+            assert!(
+                resolve_safe_path(vault.path(), requested).is_err(),
+                "vault ルートに解決される {requested:?} が通ってしまった"
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_paths_outside_vault() {
+        let vault = TempVault::new("outside");
+        for requested in ["../etc", "sub/../../etc"] {
+            assert!(resolve_safe_path(vault.path(), requested).is_err());
+        }
+    }
+
+    #[test]
+    fn accepts_existing_and_new_paths_inside_vault() {
+        let vault = TempVault::new("inside");
+        assert!(resolve_safe_path(vault.path(), "note.md").is_ok());
+        assert!(resolve_safe_path(vault.path(), "sub").is_ok());
+        assert!(resolve_safe_path(vault.path(), "new/deep/note.md").is_ok());
+    }
 }

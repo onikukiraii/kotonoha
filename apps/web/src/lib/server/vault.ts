@@ -4,8 +4,9 @@ import type { FileNode } from '@kotonoha/types'
 import { env } from './env.js'
 
 export function resolveSafePath(requestedPath: string): string {
-  const resolved = path.resolve(env.VAULT_PATH, requestedPath)
-  if (!resolved.startsWith(path.resolve(env.VAULT_PATH))) {
+  const root = path.resolve(env.VAULT_PATH)
+  const resolved = path.resolve(root, requestedPath)
+  if (!resolved.startsWith(root + path.sep)) {
     throw new Error('Path traversal detected')
   }
   return resolved
