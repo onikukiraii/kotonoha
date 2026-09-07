@@ -1,4 +1,4 @@
-.PHONY: dev build docker-up docker-down prod-up prod-down prod-logs lint typecheck hash-password
+.PHONY: dev build docker-up docker-down prod-up prod-down prod-logs lint typecheck test hash-password
 
 dev:
 	pnpm dev:web
@@ -26,6 +26,10 @@ lint:
 
 typecheck:
 	pnpm -r typecheck
+
+test:
+	pnpm -r test
+	cd apps/desktop/src-tauri && cargo test --lib
 
 hash-password:
 	@read -p "Password: " pass && node -e "import('bcrypt').then(b=>b.hash('$$pass',10)).then(console.log)"
