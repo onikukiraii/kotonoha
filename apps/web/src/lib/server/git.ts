@@ -31,6 +31,17 @@ async function configureGitUser(): Promise<void> {
   await git.raw(['config', 'user.email', env.GIT_USER_EMAIL])
 }
 
+/** deleted / renamed を落とすと、削除とフォルダ移動だけの変更が commit されずに残る */
+function hasLocalChanges(status: Awaited<ReturnType<SimpleGit['status']>>): boolean {
+  return (
+    status.not_added.length > 0 ||
+    status.modified.length > 0 ||
+    status.staged.length > 0 ||
+    status.deleted.length > 0 ||
+    status.renamed.length > 0
+  )
+}
+
 /**
  * 競合マーカーを除去して両方の内容を結合する
  * <<<<<<< / ======= / >>>>>>> マーカーを取り除き、両側の内容を保持する
@@ -144,12 +155,7 @@ export async function initOrCloneVault(): Promise<void> {
         }
 
         // Commit any uncommitted local changes before pulling
-        const status = await git.status()
-        const hasChanges =
-          status.not_added.length > 0 ||
-          status.modified.length > 0 ||
-          status.staged.length > 0
-        if (hasChanges) {
+        if (hasLocalChanges(await git.status())) {
           await git.add('-A')
           await git.commit('auto: commit local changes before pull')
           console.log('[git] committed local changes before startup pull')
@@ -193,12 +199,7 @@ export async function gitPull(): Promise<{ updated: boolean; conflicts: string[]
     const git = getGit()
 
     // Commit any local changes before pulling to avoid untracked file conflicts
-    const status = await git.status()
-    const hasChanges =
-      status.not_added.length > 0 ||
-      status.modified.length > 0 ||
-      status.staged.length > 0
-    if (hasChanges) {
+    if (hasLocalChanges(await git.status())) {
       await git.add('-A')
       await git.commit('auto: commit local changes before pull')
       console.log('[git] committed local changes before pull')
