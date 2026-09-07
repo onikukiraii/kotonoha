@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { FileNode } from '@kotonoha/types'
+  import { moveDestination } from './tree-move.js'
 
   interface Props {
     nodes?: FileNode[]
@@ -11,6 +12,8 @@
     onCreateFile?: () => void
     onDeleteFile?: (node: FileNode) => void
     onRenameFile?: (node: FileNode) => void
+    onMove?: (fromPath: string, toDir: string) => void
+    onNodeMenu?: (node: FileNode) => void
   }
 
   let {
@@ -23,11 +26,21 @@
     onCreateFile = () => {},
     onDeleteFile = () => {},
     onRenameFile = () => {},
+    onMove = () => {},
+    onNodeMenu = () => {},
   }: Props = $props()
+
+  const LONG_PRESS_MS = 500
 
   let expandedDirs = $state(new Set<string>())
   let focusedIndex = $state(0)
   let treeElement: HTMLDivElement | undefined = $state()
+
+  let dragSource = $state<string | null>(null)
+  let dragTarget = $state<string | null>(null)
+
+  let longPressTimer: ReturnType<typeof setTimeout> | null = null
+  let suppressNextClick = false
 
   function flattenVisible(items: FileNode[]): FileNode[] {
     const result: FileNode[] = []
@@ -58,10 +71,44 @@
   }
 
   function handleClick(node: FileNode) {
+    if (suppressNextClick) {
+      suppressNextClick = false
+      return
+    }
     if (node.is_dir) {
       toggleDir(node.path)
     } else {
       onSelect(node)
+    }
+  }
+
+  function canDropInto(node: FileNode): boolean {
+    return (
+      node.is_dir && dragSource !== null && moveDestination(dragSource, node.path) !== null
+    )
+  }
+
+  function drop(toDir: string) {
+    if (dragSource && moveDestination(dragSource, toDir)) {
+      onMove(dragSource, toDir)
+    }
+    dragSource = null
+    dragTarget = null
+  }
+
+  function startLongPress(node: FileNode) {
+    cancelLongPress()
+    longPressTimer = setTimeout(() => {
+      longPressTimer = null
+      suppressNextClick = true
+      onNodeMenu(node)
+    }, LONG_PRESS_MS)
+  }
+
+  function cancelLongPress() {
+    if (longPressTimer) {
+      clearTimeout(longPressTimer)
+      longPressTimer = null
     }
   }
 
@@ -152,6 +199,8 @@
   class="filetree"
   tabindex="0"
   onkeydown={handleKeydown}
+  ondragover={(e) => { if (dragSource) e.preventDefault() }}
+  ondrop={(e) => { e.preventDefault(); drop('') }}
 >
   {#each flatNodes as node, i}
     <!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -160,9 +209,40 @@
       class:selected={node.path === selectedPath}
       class:focused={keyboardMode && i === focusedIndex}
       class:directory={node.is_dir}
+      class:drop-target={dragTarget === node.path}
+      role="button"
+      tabindex="-1"
+      aria-label={node.path}
+      aria-expanded={node.is_dir ? expandedDirs.has(node.path) : undefined}
       data-index={i}
       style="padding-left: {getDepth(node.path) * 16 + 12}px"
       onclick={() => handleClick(node)}
+      oncontextmenu={(e) => { e.preventDefault(); onNodeMenu(node) }}
+      draggable="true"
+      ondragstart={(e) => {
+        e.dataTransfer?.setData('text/plain', node.path)
+        dragSource = node.path
+      }}
+      ondragend={() => { dragSource = null; dragTarget = null }}
+      ondragover={(e) => {
+        if (!canDropInto(node)) return
+        e.preventDefault()
+        dragTarget = node.path
+      }}
+      ondragleave={() => { if (dragTarget === node.path) dragTarget = null }}
+      ondrop={(e) => {
+        // 行の上での drop は、落とせない相手なら何もしない。
+        // 止めないと .filetree の drop に流れてルートへ移動してしまう
+        e.preventDefault()
+        e.stopPropagation()
+        if (canDropInto(node)) drop(node.path)
+        dragSource = null
+        dragTarget = null
+      }}
+      ontouchstart={() => startLongPress(node)}
+      ontouchmove={cancelLongPress}
+      ontouchend={cancelLongPress}
+      ontouchcancel={cancelLongPress}
     >
       <span class="icon">
         {#if node.is_dir}
@@ -207,10 +287,17 @@
     overflow: hidden;
     text-overflow: ellipsis;
     transition: background var(--koto-transition-fast);
+    -webkit-touch-callout: none;
   }
 
   .tree-item:hover {
     background: var(--koto-bg-hover);
+  }
+
+  .tree-item.drop-target {
+    background: var(--koto-accent-subtle);
+    outline: 1px dashed var(--koto-accent);
+    outline-offset: -1px;
   }
 
   .tree-item.selected {

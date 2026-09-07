@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { FileNode, VaultMeta } from "@kotonoha/types";
+import { isUnder, remapOpenPath } from "@kotonoha/ui/tree-move";
 import { notifyFileSaved } from "./git.svelte";
 
 let vaultMeta = $state<VaultMeta | null>(null);
@@ -128,32 +129,35 @@ export async function createNewFile(path: string, content?: string): Promise<voi
   await openTab(path);
 }
 
-export async function deleteCurrentFile(path: string): Promise<void> {
+export async function createFolder(path: string): Promise<void> {
   if (!vaultMeta) return;
-  await invoke("delete_file", { path, vaultPath: vaultMeta.path });
-  // Close the tab for the deleted file
-  const { closeTabByPath } = await import("./tabs.svelte");
-  closeTabByPath(path);
-  if (currentFile === path) {
+  await invoke("create_folder", { path, vaultPath: vaultMeta.path });
+  await loadFiles();
+}
+
+export async function deleteEntry(path: string): Promise<void> {
+  if (!vaultMeta) return;
+  await invoke("delete_entry", { path, vaultPath: vaultMeta.path });
+  const { closeTabsUnder } = await import("./tabs.svelte");
+  await closeTabsUnder(path);
+  if (currentFile !== null && isUnder(currentFile, path)) {
     currentFile = null;
     fileContent = "";
   }
   await loadFiles();
+  // ponytail: vault 全体の走査。数百ノートでは数十ミリ秒。
+  // 遅くなったら remove_file_from_index をコマンド化してピンポイント更新にする
+  await buildIndex();
 }
 
-export async function renameCurrentFile(
-  from: string,
-  to: string,
-): Promise<void> {
+export async function moveEntry(from: string, to: string): Promise<void> {
   if (!vaultMeta) return;
   await invoke("rename_file", { from, to, vaultPath: vaultMeta.path });
-  // Update the tab for the renamed file
-  const { renameTab } = await import("./tabs.svelte");
-  renameTab(from, to);
-  if (currentFile === from) {
-    currentFile = to;
-  }
+  const { renameTabsUnder } = await import("./tabs.svelte");
+  renameTabsUnder(from, to);
+  currentFile = remapOpenPath(currentFile, from, to);
   await loadFiles();
+  await buildIndex();
 }
 
 export async function openDailyNote(): Promise<string | null> {

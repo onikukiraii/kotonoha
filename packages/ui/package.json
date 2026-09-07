@@ -21,10 +21,15 @@
     "./livePreview": {
       "types": "./src/livePreview.ts",
       "import": "./src/livePreview.ts"
+    },
+    "./tree-move": {
+      "types": "./src/tree-move.ts",
+      "import": "./src/tree-move.ts"
     }
   },
   "scripts": {
-    "typecheck": "svelte-check --tsconfig ./tsconfig.json"
+    "typecheck": "svelte-check --tsconfig ./tsconfig.json",
+    "test": "vitest run"
   },
   "peerDependencies": {
     "svelte": "^5.0.0"
@@ -32,7 +37,8 @@
   "devDependencies": {
     "svelte": "^5.0.0",
     "svelte-check": "^4.0.0",
-    "typescript": "^5.7.0"
+    "typescript": "^5.7.0",
+    "vitest": "^2.1.0"
   },
   "dependencies": {
     "@kotonoha/base": "workspace:*",

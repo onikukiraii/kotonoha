@@ -175,16 +175,13 @@ pub fn list_files(vault_path: String) -> Result<Vec<FileNode>, String> {
             let name = entry.file_name().to_string_lossy().to_string();
 
             if path.is_dir() {
-                let children = build_tree(&path, vault_root)?;
-                if !children.is_empty() {
-                    nodes.push(FileNode {
-                        name,
-                        path: relative,
-                        is_dir: true,
-                        children: Some(children),
-                        updated_at: None,
-                    });
-                }
+                nodes.push(FileNode {
+                    name,
+                    path: relative,
+                    is_dir: true,
+                    children: Some(build_tree(&path, vault_root)?),
+                    updated_at: None,
+                });
             } else if path
                 .extension()
                 .map_or(false, |ext| ext == "md" || ext == "base" || ext == "html")
@@ -245,6 +242,9 @@ pub fn create_file(
     content: Option<String>,
 ) -> Result<(), String> {
     let abs_path = resolve_safe_path(&vault_path, &path)?;
+    if abs_path.exists() {
+        return Err(format!("{path} already exists"));
+    }
     super::watcher::mark_self_write(abs_path.clone());
     if let Some(parent) = abs_path.parent() {
         fs::create_dir_all(parent).map_err(|e| e.to_string())?;
@@ -253,16 +253,33 @@ pub fn create_file(
 }
 
 #[tauri::command]
-pub fn delete_file(path: String, vault_path: String) -> Result<(), String> {
+pub fn create_folder(path: String, vault_path: String) -> Result<(), String> {
+    let abs_path = resolve_safe_path(&vault_path, &path)?;
+    if abs_path.exists() {
+        return Err(format!("{path} already exists"));
+    }
+    super::watcher::mark_self_write(abs_path.clone());
+    fs::create_dir_all(&abs_path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn delete_entry(path: String, vault_path: String) -> Result<(), String> {
     let abs_path = resolve_safe_path(&vault_path, &path)?;
     super::watcher::mark_self_write(abs_path.clone());
-    fs::remove_file(&abs_path).map_err(|e| e.to_string())
+    if abs_path.is_dir() {
+        fs::remove_dir_all(&abs_path).map_err(|e| e.to_string())
+    } else {
+        fs::remove_file(&abs_path).map_err(|e| e.to_string())
+    }
 }
 
 #[tauri::command]
 pub fn rename_file(from: String, to: String, vault_path: String) -> Result<(), String> {
     let abs_from = resolve_safe_path(&vault_path, &from)?;
     let abs_to = resolve_safe_path(&vault_path, &to)?;
+    if abs_to.exists() {
+        return Err(format!("{to} already exists"));
+    }
     super::watcher::mark_self_write(abs_from.clone());
     super::watcher::mark_self_write(abs_to.clone());
     if let Some(parent) = abs_to.parent() {
@@ -331,7 +348,7 @@ pub fn list_subdirs(dir_path: String, vault_path: String) -> Result<Vec<String>,
 
 #[cfg(test)]
 mod tests {
-    use super::resolve_safe_path;
+    use super::{create_file, create_folder, delete_entry, list_files, rename_file, resolve_safe_path};
     use std::fs;
 
     struct TempVault(std::path::PathBuf);
@@ -380,5 +397,65 @@ mod tests {
         assert!(resolve_safe_path(vault.path(), "note.md").is_ok());
         assert!(resolve_safe_path(vault.path(), "sub").is_ok());
         assert!(resolve_safe_path(vault.path(), "new/deep/note.md").is_ok());
+    }
+
+    fn tree_paths(vault: &TempVault) -> Vec<String> {
+        fn walk(nodes: &[super::FileNode], acc: &mut Vec<String>) {
+            for node in nodes {
+                acc.push(node.path.clone());
+                if let Some(children) = &node.children {
+                    walk(children, acc);
+                }
+            }
+        }
+        let mut acc = Vec::new();
+        walk(&list_files(vault.path().to_string()).unwrap(), &mut acc);
+        acc
+    }
+
+    #[test]
+    fn created_empty_folder_appears_in_tree() {
+        let vault = TempVault::new("empty-folder");
+        create_folder("fresh".into(), vault.path().into()).unwrap();
+        assert!(tree_paths(&vault).contains(&"fresh".to_string()));
+    }
+
+    #[test]
+    fn rejects_creating_over_an_existing_entry() {
+        let vault = TempVault::new("collision");
+        assert!(create_folder("sub".into(), vault.path().into()).is_err());
+        assert!(create_file("note.md".into(), vault.path().into(), Some("上書き".into())).is_err());
+        assert_eq!(fs::read_to_string(vault.0.join("note.md")).unwrap(), "x");
+    }
+
+    #[test]
+    fn delete_entry_removes_folders_with_their_contents() {
+        let vault = TempVault::new("delete-dir");
+        create_file("sub/deep/a.md".into(), vault.path().into(), None).unwrap();
+        delete_entry("sub".into(), vault.path().into()).unwrap();
+        assert!(!vault.0.join("sub").exists());
+        assert!(vault.0.join("note.md").exists());
+    }
+
+    #[test]
+    fn rename_moves_folders_but_refuses_to_overwrite() {
+        let vault = TempVault::new("move-dir");
+        create_file("sub/a.md".into(), vault.path().into(), Some("中身".into())).unwrap();
+        create_folder("dest".into(), vault.path().into()).unwrap();
+
+        rename_file("sub".into(), "dest/sub".into(), vault.path().into()).unwrap();
+        assert_eq!(fs::read_to_string(vault.0.join("dest/sub/a.md")).unwrap(), "中身");
+
+        create_folder("sub".into(), vault.path().into()).unwrap();
+        assert!(rename_file("sub".into(), "dest/sub".into(), vault.path().into()).is_err());
+        assert!(vault.0.join("dest/sub/a.md").exists());
+    }
+
+    #[test]
+    fn rename_refuses_moving_a_folder_into_its_own_descendant() {
+        let vault = TempVault::new("descendant");
+        create_folder("sub/deep".into(), vault.path().into()).unwrap();
+        assert!(rename_file("sub".into(), "sub/deep/sub".into(), vault.path().into()).is_err());
+        assert!(vault.0.join("sub/deep").exists());
     }
 }

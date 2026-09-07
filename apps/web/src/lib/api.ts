@@ -41,7 +41,14 @@ export async function createNewFile(path: string, content?: string): Promise<voi
   })
 }
 
-export async function deleteFileApi(path: string): Promise<void> {
+export async function createNewFolder(path: string): Promise<void> {
+  await fetchApi('/api/files', {
+    method: 'POST',
+    body: JSON.stringify({ path, is_dir: true }),
+  })
+}
+
+export async function deleteEntryApi(path: string): Promise<void> {
   await fetchApi(`/api/files?path=${encodeURIComponent(path)}`, {
     method: 'DELETE',
   })

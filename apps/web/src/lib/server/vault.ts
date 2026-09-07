@@ -1,4 +1,5 @@
-import { readdir, readFile, writeFile, mkdir, unlink, rename, stat } from 'fs/promises'
+import { readdir, readFile, writeFile, mkdir, rm, rename, stat } from 'fs/promises'
+import { existsSync } from 'fs'
 import path from 'path'
 import type { FileNode } from '@kotonoha/types'
 import { env } from './env.js'
@@ -30,15 +31,12 @@ export async function getFileTree(dirPath?: string): Promise<FileNode[]> {
     const relativePath = path.relative(env.VAULT_PATH, fullPath)
 
     if (entry.isDirectory()) {
-      const children = await getFileTree(relativePath)
-      if (children.length > 0) {
-        nodes.push({
-          name: entry.name,
-          path: relativePath,
-          is_dir: true,
-          children,
-        })
-      }
+      nodes.push({
+        name: entry.name,
+        path: relativePath,
+        is_dir: true,
+        children: await getFileTree(relativePath),
+      })
     } else if (entry.name.endsWith('.md') || entry.name.endsWith('.base') || entry.name.endsWith('.html')) {
       const fileStat = await stat(fullPath)
       nodes.push({
@@ -68,20 +66,36 @@ export async function writeFileContent(filePath: string, content: string): Promi
   return fileStat.mtimeMs
 }
 
+export class AlreadyExistsError extends Error {}
+
 export async function createFile(filePath: string, content: string = ''): Promise<void> {
   const absPath = resolveSafePath(filePath)
+  if (existsSync(absPath)) {
+    throw new AlreadyExistsError(`${filePath} already exists`)
+  }
   await mkdir(path.dirname(absPath), { recursive: true })
   await writeFile(absPath, content, 'utf-8')
 }
 
-export async function deleteFile(filePath: string): Promise<void> {
-  const absPath = resolveSafePath(filePath)
-  await unlink(absPath)
+export async function createFolder(dirPath: string): Promise<void> {
+  const absPath = resolveSafePath(dirPath)
+  if (existsSync(absPath)) {
+    throw new AlreadyExistsError(`${dirPath} already exists`)
+  }
+  await mkdir(absPath, { recursive: true })
+}
+
+export async function deleteEntry(entryPath: string): Promise<void> {
+  const absPath = resolveSafePath(entryPath)
+  await rm(absPath, { recursive: true })
 }
 
 export async function renameFile(from: string, to: string): Promise<void> {
   const absFrom = resolveSafePath(from)
   const absTo = resolveSafePath(to)
+  if (existsSync(absTo)) {
+    throw new AlreadyExistsError(`${to} already exists`)
+  }
   await mkdir(path.dirname(absTo), { recursive: true })
   await rename(absFrom, absTo)
 }

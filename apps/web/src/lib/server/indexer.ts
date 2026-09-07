@@ -70,4 +70,31 @@ export async function removeFileIndex(filePath: string): Promise<void> {
   deleteFileRecord(filePath)
 }
 
+/** ファイルなら1件、フォルダなら配下の全ファイルを索引に入れ直す。 */
+export async function indexPath(relPath: string): Promise<void> {
+  const absPath = resolveSafePath(relPath)
+  const entryStat = await stat(absPath)
+
+  if (!entryStat.isDirectory()) {
+    const { content } = await readFileContent(relPath)
+    await updateFileIndex(relPath, content)
+    return
+  }
+
+  for (const file of flattenFiles(await getFileTree(relPath))) {
+    const { content } = await readFileContent(file.path)
+    await updateFileIndex(file.path, content)
+  }
+}
+
+/** パス自身と、その配下のファイルの索引を落とす。 */
+export async function removeIndexUnder(relPath: string): Promise<void> {
+  const prefix = `${relPath}/`
+  for (const file of getAllFiles()) {
+    if (file.path === relPath || file.path.startsWith(prefix)) {
+      deleteFileRecord(file.path)
+    }
+  }
+}
+
 export { path }

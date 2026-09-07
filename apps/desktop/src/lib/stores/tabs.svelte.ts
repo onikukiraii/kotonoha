@@ -1,3 +1,4 @@
+import { isUnder, remapOpenPath } from "@kotonoha/ui/tree-move";
 import { openFile, saveFile } from "./vault.svelte";
 import { getEditorState } from "./editor.svelte";
 
@@ -110,22 +111,40 @@ export async function activatePrevTab(): Promise<void> {
   await activateTab(tabs[prevIdx].id);
 }
 
-export function closeTabByPath(filePath: string): void {
-  const tab = tabs.find((t) => t.filePath === filePath);
-  if (tab) {
-    closeTab(tab.id);
+/**
+ * 削除されたファイル・フォルダ配下のタブを、保存せずに閉じる。
+ * closeTab は dirty なら書き戻すので、削除の後始末には使えない。
+ */
+export async function closeTabsUnder(pathOrDir: string): Promise<void> {
+  const closing = tabs.filter((t) => isUnder(t.filePath, pathOrDir));
+  if (closing.length === 0) return;
+
+  const wasActive = closing.some((t) => t.id === activeTabId);
+  const idx = tabs.findIndex((t) => t.id === activeTabId);
+  tabs = tabs.filter((t) => !isUnder(t.filePath, pathOrDir));
+
+  if (!wasActive) return;
+  if (tabs.length === 0) {
+    activeTabId = null;
+    editor.isDirty = false;
+    return;
   }
+  const nextIdx = Math.min(Math.max(idx, 0), tabs.length - 1);
+  await openFile(tabs[nextIdx].filePath);
+  activeTabId = tabs[nextIdx].id;
+  editor.isDirty = tabs[nextIdx].isDirty;
 }
 
-// Rename tab when file is renamed
-export function renameTab(oldPath: string, newPath: string): void {
-  const tab = tabs.find((t) => t.filePath === oldPath);
-  if (tab) {
-    tab.id = newPath;
-    tab.filePath = newPath;
-    if (activeTabId === oldPath) {
-      activeTabId = newPath;
+/** 移動・改名されたファイル・フォルダ配下のタブのパスを差し替える */
+export function renameTabsUnder(from: string, to: string): void {
+  for (const tab of tabs) {
+    const remapped = remapOpenPath(tab.filePath, from, to);
+    if (remapped === null || remapped === tab.filePath) continue;
+    if (activeTabId === tab.id) {
+      activeTabId = remapped;
     }
+    tab.id = remapped;
+    tab.filePath = remapped;
   }
 }
 

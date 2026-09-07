@@ -13,9 +13,10 @@
     openFile,
   } from '$lib/stores/vault.js'
   import { isDirty, scheduleSave } from '$lib/stores/editor.js'
-  import { searchFiles, searchFullText, openDailyNote, getSubdirs, createLearningLog, createNewFile, deleteFileApi, renameFileApi, runBaseApi, updateBasePropertyApi, getBaseContentApi, saveBaseContentApi, getBaseSchemaApi } from '$lib/api.js'
+  import { searchFiles, searchFullText, openDailyNote, getSubdirs, createLearningLog, createNewFile, createNewFolder, deleteEntryApi, renameFileApi, runBaseApi, updateBasePropertyApi, getBaseContentApi, saveBaseContentApi, getBaseSchemaApi } from '$lib/api.js'
   import { renderMarkdownClient } from '$lib/markdown.js'
   import { LEARNING_LOGS_DIR } from '@kotonoha/ui/learning-log'
+  import { isUnder, moveDestination, remapOpenPath } from '@kotonoha/ui/tree-move'
 
   // Mobile: 2 tabs (files / note), note has editor/preview toggle
   type MobileTab = 'files' | 'note'
@@ -37,6 +38,7 @@
   let baseAst = $state<BaseFile | null>(null)
   let baseSchema = $state<PropertySchema | null>(null)
   let showCreateWizard = $state(false)
+  let baseWizardDir = $state('')
   let saveTimer: ReturnType<typeof setTimeout> | null = null
   const isBaseFile = $derived($currentFilePath?.endsWith('.base') ?? false)
   const isHtmlFile = $derived($currentFilePath?.endsWith('.html') ?? false)
@@ -56,6 +58,31 @@
     return acc
   }
 
+  function findNode(nodes: FileNode[], path: string): FileNode | null {
+    for (const n of nodes) {
+      if (n.path === path) return n
+      if (n.children) {
+        const found = findNode(n.children, path)
+        if (found) return found
+      }
+    }
+    return null
+  }
+
+  function countFiles(node: FileNode): number {
+    if (!node.is_dir) return 1
+    return (node.children ?? []).reduce((sum, child) => sum + countFiles(child), 0)
+  }
+
+  function parentDir(path: string): string {
+    return path.split('/').slice(0, -1).join('/')
+  }
+
+  /** ノードを起点にした作成先。フォルダならその中、ファイルならその隣 */
+  function containingDir(node: FileNode): string {
+    return node.is_dir ? node.path : parentDir(node.path)
+  }
+
   async function handleBaseAstChange(next: BaseFile) {
     baseAst = next
     const yaml = serializeBase(next)
@@ -73,29 +100,41 @@
   }
 
   async function handleCreateBase(filePath: string, yaml: string) {
-    await createNewFile(filePath, yaml)
+    const path = baseWizardDir && !filePath.startsWith(`${baseWizardDir}/`)
+      ? `${baseWizardDir}/${filePath}`
+      : filePath
+    await createNewFile(path, yaml)
     await loadFileTree()
     showCreateWizard = false
     await handleFileSelect({
-      name: filePath.split('/').pop() ?? filePath,
-      path: filePath,
+      name: path.split('/').pop() ?? path,
+      path,
       is_dir: false,
     })
   }
 
-  // File creation
-  let creating = $state(false)
-  let newFileName = $state('')
-  let createInputEl: HTMLInputElement | undefined = $state()
+  // ツリー上の入力行。作成もフォルダ作成も改名もここで受ける
+  type TreeInput =
+    | { kind: 'file'; dir: string }
+    | { kind: 'folder'; dir: string }
+    | { kind: 'rename'; target: FileNode }
+  let treeInput = $state<TreeInput | null>(null)
+  let treeInputValue = $state('')
+  let treeInputEl: HTMLInputElement | undefined = $state()
 
-  // File action menu & delete confirmation
-  let showFileActions = $state(false)
-  let showDeleteConfirm = $state(false)
+  // ノード単位のアクションシート・移動先選択・削除確認
+  let actionTarget = $state<FileNode | null>(null)
+  let moveTarget = $state<FileNode | null>(null)
+  let deleteTarget = $state<FileNode | null>(null)
+  let opError = $state<string | null>(null)
 
-  // Rename
-  let renaming = $state(false)
-  let renameValue = $state('')
-  let renameInputEl: HTMLInputElement | undefined = $state()
+  const moveCandidates = $derived.by(() => {
+    const node = moveTarget
+    if (!node) return []
+    return ['', ...collectFolders($fileTree)].filter(
+      (dir) => moveDestination(node.path, dir) !== null,
+    )
+  })
 
   // Swipe gesture state (files <-> note)
   let touchStartX = $state(0)
@@ -292,118 +331,125 @@
     showCategoryPicker = true
   }
 
-  // --- File Creation ---
-  function startCreate() {
-    creating = true
-    newFileName = ''
-    requestAnimationFrame(() => createInputEl?.focus())
-  }
-
-  async function handleCreateSubmit() {
-    const name = newFileName.trim()
-    if (!name) {
-      creating = false
-      return
-    }
-    if (name.endsWith('.base') || name === 'base') {
-      // Open the wizard instead of creating an empty .base
-      showCreateWizard = true
-      creating = false
-      newFileName = ''
-      return
-    }
-    const path = name.endsWith('.md') ? name : `${name}.md`
-    try {
-      await createNewFile(path, '')
-      await loadFileTree()
-      await openFile(path)
-      editorContent = $currentFileContent
-      renderedHtml = renderMarkdownClient(editorContent)
-      mobileTab = 'note'
-      noteMode = 'editor'
-    } catch (err) {
-      console.error('Create failed:', err)
-    }
-    creating = false
-    newFileName = ''
-  }
-
-  function handleCreateKeydown(e: KeyboardEvent) {
-    if (e.key === 'Escape') {
-      creating = false
-    } else if (e.key === 'Enter') {
-      handleCreateSubmit()
-    }
-  }
-
-  // --- File Deletion ---
-  async function handleDeleteFile() {
-    const path = $currentFilePath
-    if (!path) return
-    try {
-      await deleteFileApi(path)
-      currentFilePath.set(null)
-      currentFileContent.set('')
-      editorContent = ''
-      renderedHtml = ''
-      await loadFileTree()
-      mobileTab = 'files'
-    } catch (err) {
-      console.error('Delete failed:', err)
-    }
-    showDeleteConfirm = false
-    showFileActions = false
-  }
-
-  // --- File Rename ---
-  function startRename() {
-    showFileActions = false
-    renaming = true
-    const filename = $currentFilePath?.split('/').pop() ?? ''
-    renameValue = filename.replace(/\.(md|base|html)$/, '')
+  // --- ツリー上の入力行 ---
+  function startTreeInput(input: TreeInput) {
+    actionTarget = null
+    opError = null
+    treeInput = input
+    treeInputValue = input.kind === 'rename' ? input.target.name : ''
     requestAnimationFrame(() => {
-      renameInputEl?.focus()
-      renameInputEl?.select()
+      treeInputEl?.focus()
+      treeInputEl?.select()
     })
   }
 
-  async function handleRenameSubmit() {
-    const oldPath = $currentFilePath
-    if (!oldPath || !renameValue.trim()) {
-      renaming = false
-      return
-    }
-    const trimmed = renameValue.trim()
-    const currentExt = oldPath.endsWith('.base') ? '.base' : oldPath.endsWith('.html') ? '.html' : '.md'
-    const newName = trimmed.endsWith('.md') || trimmed.endsWith('.base')
-      ? trimmed
-      : `${trimmed}${currentExt}`
-    const parts = oldPath.split('/')
-    parts[parts.length - 1] = newName
-    const newPath = parts.join('/')
-
-    if (newPath === oldPath) {
-      renaming = false
-      return
-    }
-
-    try {
-      await renameFileApi(oldPath, newPath)
-      await loadFileTree()
-      await openFile(newPath)
-      editorContent = $currentFileContent
-      renderedHtml = renderMarkdownClient(editorContent)
-    } catch (err) {
-      console.error('Rename failed:', err)
-    }
-    renaming = false
+  async function openMarkdown(path: string) {
+    await openFile(path)
+    editorContent = $currentFileContent
+    renderedHtml = renderMarkdownClient(editorContent)
+    mobileTab = 'note'
+    noteMode = 'editor'
   }
 
-  function handleRenameKeydown(e: KeyboardEvent) {
+  function withMdExtension(name: string): string {
+    return /\.(md|base|html)$/.test(name) ? name : `${name}.md`
+  }
+
+  async function handleTreeInputSubmit() {
+    const input = treeInput
+    const name = treeInputValue.trim()
+    if (!input || !name) {
+      treeInput = null
+      return
+    }
+
+    // .base は空ファイルではなくウィザードで組み立てる
+    if (input.kind === 'file' && (name.endsWith('.base') || name === 'base')) {
+      baseWizardDir = input.dir
+      showCreateWizard = true
+      treeInput = null
+      return
+    }
+
+    treeInput = null
+    opError = null
+    try {
+      if (input.kind === 'folder') {
+        await createNewFolder(input.dir ? `${input.dir}/${name}` : name)
+        await loadFileTree()
+        return
+      }
+      if (input.kind === 'file') {
+        const path = withMdExtension(input.dir ? `${input.dir}/${name}` : name)
+        await createNewFile(path, '')
+        await loadFileTree()
+        await openMarkdown(path)
+        return
+      }
+      const { target } = input
+      const newName = target.is_dir ? name : withMdExtension(name)
+      const dir = parentDir(target.path)
+      await applyMove(target.path, dir ? `${dir}/${newName}` : newName)
+    } catch (err) {
+      opError = (err as Error).message
+    }
+  }
+
+  function handleTreeInputKeydown(e: KeyboardEvent) {
     if (e.key === 'Escape') {
-      renaming = false
+      treeInput = null
     } else if (e.key === 'Enter') {
-      handleRenameSubmit()
+      handleTreeInputSubmit()
+    }
+  }
+
+  // --- 移動と改名（どちらも rename API） ---
+  async function applyMove(from: string, to: string) {
+    if (from === to) return
+    await renameFileApi(from, to)
+    await loadFileTree()
+    // 中身は変わらないのでパスだけ差し替える。開き直すと .base や .html の
+    // 表示が崩れ、ドラッグしただけでノートのペインへ飛ばされる。
+    // 自動保存は保存時に currentFilePath を読むので、ここを更新しないと旧パスへ書き戻す
+    currentFilePath.set(remapOpenPath($currentFilePath, from, to))
+  }
+
+  async function handleMove(fromPath: string, toDir: string) {
+    const to = moveDestination(fromPath, toDir)
+    if (!to) return
+    opError = null
+    try {
+      await applyMove(fromPath, to)
+    } catch (err) {
+      opError = (err as Error).message
+    }
+  }
+
+  async function handleMoveSelect(toDir: string) {
+    const node = moveTarget
+    moveTarget = null
+    if (node) await handleMove(node.path, toDir)
+  }
+
+  // --- 削除 ---
+  async function handleDeleteConfirm() {
+    const node = deleteTarget
+    deleteTarget = null
+    if (!node) return
+
+    opError = null
+    try {
+      await deleteEntryApi(node.path)
+      if ($currentFilePath !== null && isUnder($currentFilePath, node.path)) {
+        currentFilePath.set(null)
+        currentFileContent.set('')
+        editorContent = ''
+        renderedHtml = ''
+        mobileTab = 'files'
+      }
+      await loadFileTree()
+    } catch (err) {
+      opError = (err as Error).message
     }
   }
 
@@ -452,7 +498,7 @@
     folders={collectFolders($fileTree)}
     loadSchema={(folder) => getBaseSchemaApi(folder)}
     onCreate={handleCreateBase}
-    onCancel={() => (showCreateWizard = false)}
+    onCancel={() => { showCreateWizard = false; baseWizardDir = '' }}
   />
 {/if}
 
@@ -479,29 +525,53 @@
             </svg>
             検索
           </button>
-          <button class="create-btn" onclick={startCreate} title="新規ファイル">
+          <button
+            class="create-btn"
+            onclick={() => startTreeInput({ kind: 'folder', dir: '' })}
+            title="新規フォルダ"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/>
+              <line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/>
+            </svg>
+          </button>
+          <button
+            class="create-btn"
+            onclick={() => startTreeInput({ kind: 'file', dir: '' })}
+            title="新規ファイル"
+          >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
             </svg>
           </button>
         </div>
-        {#if creating}
+        {#if treeInput}
           <div class="create-input-row">
+            {#if treeInput.kind === 'rename'}
+              <span class="input-hint">名前を変更</span>
+            {:else if treeInput.dir}
+              <span class="input-hint">{treeInput.dir}/</span>
+            {/if}
             <input
-              bind:this={createInputEl}
-              bind:value={newFileName}
-              placeholder="filename.md / reading.base"
+              bind:this={treeInputEl}
+              bind:value={treeInputValue}
+              placeholder={treeInput.kind === 'folder' ? 'フォルダ名' : 'filename.md / reading.base'}
               class="create-input"
-              onkeydown={handleCreateKeydown}
-              onblur={() => { if (!newFileName.trim()) creating = false }}
+              onkeydown={handleTreeInputKeydown}
+              onblur={() => { if (!treeInputValue.trim()) treeInput = null }}
             />
           </div>
+        {/if}
+        {#if opError}
+          <div class="op-error" role="alert">{opError}</div>
         {/if}
         <FileTree
           nodes={$fileTree}
           selectedPath={$currentFilePath}
           disableVimKeys={true}
           onSelect={handleFileSelect}
+          onMove={handleMove}
+          onNodeMenu={(node) => { opError = null; actionTarget = node }}
         />
       </aside>
     </div>
@@ -510,21 +580,18 @@
     <div class="mobile-pane">
       {#if $currentFilePath}
         <div class="note-header">
-          {#if renaming}
-            <input
-              bind:this={renameInputEl}
-              bind:value={renameValue}
-              class="rename-input"
-              onkeydown={handleRenameKeydown}
-              onblur={handleRenameSubmit}
-            />
-          {:else}
-            <span class="file-name">{$currentFilePath.split('/').pop()}</span>
-          {/if}
+          <span class="file-name">{$currentFilePath.split('/').pop()}</span>
           {#if !isBaseFile && !isHtmlFile && noteMode === 'editor' && $isDirty}
             <span class="dirty-indicator">*</span>
           {/if}
-          <button class="action-menu-btn" onclick={() => (showFileActions = true)} title="ファイル操作">
+          <button
+            class="action-menu-btn"
+            onclick={() => {
+              const path = $currentFilePath
+              if (path) actionTarget = findNode($fileTree, path)
+            }}
+            title="ファイル操作"
+          >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
               <circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/>
             </svg>
@@ -663,42 +730,105 @@
   </button>
 </nav>
 
-{#if showFileActions}
+{#if actionTarget}
+  {@const node = actionTarget}
   <!-- svelte-ignore a11y_click_events_have_key_events -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div class="overlay" onclick={() => (showFileActions = false)}>
+  <div class="overlay" onclick={() => (actionTarget = null)}>
     <div class="action-sheet" onclick={(e) => e.stopPropagation()}>
       <div class="action-sheet-header">
-        <span class="action-sheet-title">{$currentFilePath?.split('/').pop()}</span>
+        <span class="action-sheet-title">{node.name}</span>
       </div>
-      <button class="action-sheet-item" onclick={startRename}>
+      {#if node.is_dir}
+        <button
+          class="action-sheet-item"
+          onclick={() => startTreeInput({ kind: 'file', dir: containingDir(node) })}
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/>
+          </svg>
+          ここに新規ファイル
+        </button>
+        <button
+          class="action-sheet-item"
+          onclick={() => startTreeInput({ kind: 'folder', dir: containingDir(node) })}
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/>
+            <line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/>
+          </svg>
+          ここに新規フォルダ
+        </button>
+      {/if}
+      <button
+        class="action-sheet-item"
+        onclick={() => startTreeInput({ kind: 'rename', target: node })}
+      >
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
         </svg>
         名前を変更
       </button>
-      <button class="action-sheet-item danger" onclick={() => { showFileActions = false; showDeleteConfirm = true; }}>
+      <button
+        class="action-sheet-item"
+        onclick={() => { moveTarget = node; actionTarget = null }}
+      >
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M5 12h14"/><polyline points="12 5 19 12 12 19"/>
+        </svg>
+        移動
+      </button>
+      <button
+        class="action-sheet-item danger"
+        onclick={() => { deleteTarget = node; actionTarget = null }}
+      >
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
         </svg>
         削除
       </button>
-      <button class="action-sheet-cancel" onclick={() => (showFileActions = false)}>
+      <button class="action-sheet-cancel" onclick={() => (actionTarget = null)}>
         キャンセル
       </button>
     </div>
   </div>
 {/if}
 
-{#if showDeleteConfirm}
+{#if moveTarget}
   <!-- svelte-ignore a11y_click_events_have_key_events -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div class="overlay" onclick={() => (showDeleteConfirm = false)}>
+  <div class="overlay" onclick={() => (moveTarget = null)}>
+    <div class="action-sheet scrollable" onclick={(e) => e.stopPropagation()}>
+      <div class="action-sheet-header">
+        <span class="action-sheet-title">「{moveTarget.name}」の移動先</span>
+      </div>
+      {#each moveCandidates as dir}
+        <button class="action-sheet-item" onclick={() => handleMoveSelect(dir)}>
+          {dir || 'vault のルート'}
+        </button>
+      {/each}
+      <button class="action-sheet-cancel" onclick={() => (moveTarget = null)}>
+        キャンセル
+      </button>
+    </div>
+  </div>
+{/if}
+
+{#if deleteTarget}
+  <!-- svelte-ignore a11y_click_events_have_key_events -->
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div class="overlay" onclick={() => (deleteTarget = null)}>
     <div class="confirm-sheet" onclick={(e) => e.stopPropagation()}>
-      <div class="confirm-msg">「{$currentFilePath?.split('/').pop()}」を削除しますか？</div>
+      <div class="confirm-msg">
+        {#if deleteTarget.is_dir}
+          「{deleteTarget.name}」を中のファイル {countFiles(deleteTarget)} 件ごと削除しますか？
+        {:else}
+          「{deleteTarget.name}」を削除しますか？
+        {/if}
+      </div>
       <div class="confirm-actions">
-        <button class="confirm-delete" onclick={handleDeleteFile}>削除</button>
-        <button class="confirm-cancel" onclick={() => (showDeleteConfirm = false)}>キャンセル</button>
+        <button class="confirm-delete" onclick={handleDeleteConfirm}>削除</button>
+        <button class="confirm-cancel" onclick={() => (deleteTarget = null)}>キャンセル</button>
       </div>
     </div>
   </div>
@@ -762,8 +892,31 @@
   }
 
   .create-input-row {
+    display: flex;
+    align-items: center;
+    gap: var(--koto-space-2);
     padding: var(--koto-space-2);
     border-bottom: 1px solid var(--koto-border);
+    flex-shrink: 0;
+  }
+
+  .input-hint {
+    flex-shrink: 0;
+    max-width: 40%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--koto-text-muted);
+    font-size: var(--koto-font-size-xs);
+    font-family: var(--koto-font-mono);
+  }
+
+  .op-error {
+    padding: var(--koto-space-2) var(--koto-space-3);
+    border-bottom: 1px solid var(--koto-border);
+    background: var(--koto-bg-elevated);
+    color: #f38ba8;
+    font-size: var(--koto-font-size-xs);
     flex-shrink: 0;
   }
 
@@ -887,18 +1040,6 @@
     flex-shrink: 0;
   }
 
-  .rename-input {
-    flex: 1;
-    min-height: 28px;
-    padding: var(--koto-space-1) var(--koto-space-2);
-    background: var(--koto-bg-input);
-    border: 1px solid var(--koto-accent);
-    border-radius: var(--koto-radius-sm);
-    color: var(--koto-text-primary);
-    font-size: var(--koto-font-size-sm);
-    outline: none;
-  }
-
   .action-menu-btn {
     display: flex;
     align-items: center;
@@ -1005,6 +1146,11 @@
     border-radius: var(--koto-radius-lg) var(--koto-radius-lg) 0 0;
     padding-bottom: var(--koto-safe-bottom);
     overflow: hidden;
+  }
+
+  .action-sheet.scrollable {
+    max-height: 70vh;
+    overflow-y: auto;
   }
 
   .action-sheet-header {

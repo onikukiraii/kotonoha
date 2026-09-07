@@ -2,6 +2,7 @@ import { json } from '@sveltejs/kit'
 import type { RequestHandler } from './$types.js'
 import { existsSync } from 'fs'
 import { resolveSafePath, createFile } from '$lib/server/vault.js'
+import { indexPath } from '$lib/server/indexer.js'
 import { getDailyNotePath, getDailyNoteTemplate } from '@kotonoha/ui/daily'
 
 export const POST: RequestHandler = async () => {
@@ -12,6 +13,7 @@ export const POST: RequestHandler = async () => {
 
     if (!exists) {
       await createFile(path, getDailyNoteTemplate())
+      await indexPath(path)
     }
 
     return json({ path, created: !exists })

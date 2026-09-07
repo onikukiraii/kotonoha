@@ -1,35 +1,49 @@
 import { json } from '@sveltejs/kit'
 import type { RequestHandler } from './$types.js'
-import { createFile, deleteFile } from '$lib/server/vault.js'
-import { removeFileIndex } from '$lib/server/indexer.js'
+import { AlreadyExistsError, createFile, createFolder, deleteEntry } from '$lib/server/vault.js'
+import { indexPath, removeIndexUnder } from '$lib/server/indexer.js'
 
 export const POST: RequestHandler = async ({ request }) => {
   const body = await request.json()
-  const { path: filePath, content } = body as { path: string; content?: string }
+  const { path: entryPath, content, is_dir } = body as {
+    path: string
+    content?: string
+    is_dir?: boolean
+  }
 
-  if (!filePath) {
+  if (!entryPath) {
     return json({ error: 'path required' }, { status: 400 })
   }
 
   try {
-    await createFile(filePath, content)
-    return json({ ok: true })
+    if (is_dir) {
+      await createFolder(entryPath)
+    } else {
+      await createFile(entryPath, content)
+      await indexPath(entryPath)
+    }
+    return json({ ok: true }, { status: 201 })
   } catch (err) {
-    return json({ error: 'Failed to create file' }, { status: 500 })
+    if (err instanceof AlreadyExistsError) {
+      return json({ error: '同じ名前のファイルかフォルダがあります' }, { status: 409 })
+    }
+    console.error('Create failed:', err)
+    return json({ error: '作成できませんでした' }, { status: 500 })
   }
 }
 
 export const DELETE: RequestHandler = async ({ url }) => {
-  const filePath = url.searchParams.get('path')
-  if (!filePath) {
+  const entryPath = url.searchParams.get('path')
+  if (!entryPath) {
     return json({ error: 'path parameter required' }, { status: 400 })
   }
 
   try {
-    await deleteFile(filePath)
-    await removeFileIndex(filePath)
+    await deleteEntry(entryPath)
+    await removeIndexUnder(entryPath)
     return json({ ok: true })
   } catch (err) {
-    return json({ error: 'Failed to delete file' }, { status: 500 })
+    console.error('Delete failed:', err)
+    return json({ error: '削除できませんでした' }, { status: 500 })
   }
 }

@@ -1,7 +1,8 @@
 <script lang="ts">
   import type { FileNode } from "@kotonoha/types";
   import { tick, untrack } from "svelte";
-  import { createNewFile, deleteCurrentFile, renameCurrentFile } from "../stores/vault.svelte";
+  import { moveDestination } from "@kotonoha/ui/tree-move";
+  import { createFolder, createNewFile, deleteEntry, moveEntry } from "../stores/vault.svelte";
 
   interface Props {
     files: FileNode[];
@@ -21,10 +22,17 @@
     expanded: boolean;
   }
 
+  // 入力行。作成・フォルダ作成・改名を1本で受ける
+  type TreeInput =
+    | { kind: "file"; dir: string }
+    | { kind: "folder"; dir: string }
+    | { kind: "rename"; target: FileNode };
+
   let expandedDirs = $state(new Set<string>());
   let cursorIndex = $state(0);
-  let creating = $state(false);
-  let newFileName = $state("");
+  let treeInput = $state<TreeInput | null>(null);
+  let treeInputValue = $state("");
+  let opError = $state<string | null>(null);
   let inputElement: HTMLInputElement;
   let sidebarElement: HTMLDivElement;
   let listElement: HTMLDivElement;
@@ -40,9 +48,46 @@
     contextMenu = null;
   }
 
-  async function handleDeleteFile(path: string) {
-    await deleteCurrentFile(path);
+  async function handleDeleteEntry(path: string) {
     closeContextMenu();
+    opError = null;
+    try {
+      await deleteEntry(path);
+    } catch (err) {
+      opError = String(err);
+    }
+  }
+
+  /** ノードを起点にした作成先。フォルダならその中、ファイルならその隣 */
+  function containingDir(node: FileNode): string {
+    return node.is_dir ? node.path : node.path.split("/").slice(0, -1).join("/");
+  }
+
+  function countFiles(node: FileNode): number {
+    if (!node.is_dir) return 1;
+    return (node.children ?? []).reduce((sum, child) => sum + countFiles(child), 0);
+  }
+
+  function canDropInto(node: FileNode): boolean {
+    return (
+      node.is_dir && dragSource !== null && moveDestination(dragSource, node.path) !== null
+    );
+  }
+
+  async function handleDrop(toDir: string) {
+    const from = dragSource;
+    dragSource = null;
+    dragTarget = null;
+    if (!from) return;
+    const to = moveDestination(from, toDir);
+    if (!to) return;
+
+    opError = null;
+    try {
+      await moveEntry(from, to);
+    } catch (err) {
+      opError = String(err);
+    }
   }
 
   const fileIcons: Record<string, { icon: string; color: string }> = {
@@ -148,42 +193,85 @@
     el?.scrollIntoView({ block: "nearest" });
   }
 
-  async function handleCreateSubmit() {
-    const name = newFileName.trim();
-    if (!name) {
-      creating = false;
+  /** キー操作からの削除。確認メニューをカーソル行の位置に出す */
+  function openConfirmAtCursor(node: FileNode) {
+    const rect = listElement
+      ?.querySelector(`[data-index="${cursorIndex}"]`)
+      ?.getBoundingClientRect();
+    contextMenu = {
+      x: rect?.left ?? 0,
+      y: rect?.bottom ?? 0,
+      node,
+      confirming: true,
+    };
+  }
+
+  function withMdExtension(name: string): string {
+    return /\.(md|base|html)$/.test(name) ? name : `${name}.md`;
+  }
+
+  async function handleTreeInputSubmit() {
+    const input = treeInput;
+    const name = treeInputValue.trim();
+    if (!input || !name) {
+      treeInput = null;
       return;
     }
-    if (name.endsWith(".base") || name === "base") {
-      creating = false;
-      newFileName = "";
+
+    // .base は空ファイルではなくウィザードで組み立てる
+    if (input.kind === "file" && (name.endsWith(".base") || name === "base")) {
+      treeInput = null;
+      treeInputValue = "";
       onCreateBase?.();
       return;
     }
-    const path = name.endsWith(".md") ? name : `${name}.md`;
-    await createNewFile(path);
-    creating = false;
-    newFileName = "";
+
+    treeInput = null;
+    treeInputValue = "";
+    opError = null;
+    try {
+      if (input.kind === "folder") {
+        await createFolder(input.dir ? `${input.dir}/${name}` : name);
+      } else if (input.kind === "file") {
+        await createNewFile(withMdExtension(input.dir ? `${input.dir}/${name}` : name));
+      } else {
+        const { target } = input;
+        const newName = target.is_dir ? name : withMdExtension(name);
+        const dir = target.path.split("/").slice(0, -1).join("/");
+        const to = dir ? `${dir}/${newName}` : newName;
+        if (to !== target.path) await moveEntry(target.path, to);
+      }
+    } catch (err) {
+      opError = String(err);
+    }
     tick().then(() => sidebarElement?.focus());
   }
 
-  function handleCreateKeydown(e: KeyboardEvent) {
+  function handleTreeInputKeydown(e: KeyboardEvent) {
+    // 入力行のキーをサイドバーへ流さない。
+    // Escape が伝播すると入力を閉じたうえで onBlur まで走り、ツリーごと閉じてしまう
+    e.stopPropagation();
     if (e.key === "Escape") {
-      creating = false;
+      treeInput = null;
       tick().then(() => sidebarElement?.focus());
     } else if (e.key === "Enter") {
-      handleCreateSubmit();
+      handleTreeInputSubmit();
     }
   }
 
-  function startCreate() {
-    creating = true;
-    newFileName = "";
-    requestAnimationFrame(() => inputElement?.focus());
+  function startTreeInput(input: TreeInput) {
+    closeContextMenu();
+    opError = null;
+    treeInput = input;
+    treeInputValue = input.kind === "rename" ? input.target.name : "";
+    requestAnimationFrame(() => {
+      inputElement?.focus();
+      inputElement?.select();
+    });
   }
 
   function handleKeydown(e: KeyboardEvent) {
-    if (!focused || creating) return;
+    if (!focused || treeInput) return;
 
     const item = flatItems[cursorIndex];
 
@@ -237,7 +325,19 @@
         break;
       case "o":
         e.preventDefault();
-        startCreate();
+        startTreeInput({ kind: "file", dir: item ? containingDir(item.node) : "" });
+        break;
+      case "a":
+        e.preventDefault();
+        startTreeInput({ kind: "folder", dir: item ? containingDir(item.node) : "" });
+        break;
+      case "r":
+        e.preventDefault();
+        if (item) startTreeInput({ kind: "rename", target: item.node });
+        break;
+      case "x":
+        e.preventDefault();
+        if (item) openConfirmAtCursor(item.node);
         break;
       case "g":
         e.preventDefault();
@@ -268,35 +368,53 @@
 >
   <div class="sidebar-header">
     <span class="title">{vaultPath.split("/").pop()}</span>
-    <button class="new-btn" onclick={startCreate} title="新規ファイル">+</button>
+    <button
+      class="new-btn"
+      onclick={() => startTreeInput({ kind: "folder", dir: "" })}
+      title="新規フォルダ (a)"
+    >
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" />
+        <line x1="12" y1="11" x2="12" y2="17" /><line x1="9" y1="14" x2="15" y2="14" />
+      </svg>
+    </button>
+    <button
+      class="new-btn"
+      onclick={() => startTreeInput({ kind: "file", dir: "" })}
+      title="新規ファイル (o)"
+    >
+      +
+    </button>
   </div>
 
-  {#if creating}
+  {#if treeInput}
     <div class="input-row">
+      {#if treeInput.kind === "rename"}
+        <span class="input-hint">名前を変更</span>
+      {:else if treeInput.dir}
+        <span class="input-hint">{treeInput.dir}/</span>
+      {/if}
       <input
         bind:this={inputElement}
-        bind:value={newFileName}
-        placeholder="filename.md / reading.base"
+        bind:value={treeInputValue}
+        placeholder={treeInput.kind === "folder" ? "フォルダ名" : "filename.md / reading.base"}
         class="create-input"
-        onkeydown={handleCreateKeydown}
+        onkeydown={handleTreeInputKeydown}
       />
     </div>
+  {/if}
+
+  {#if opError}
+    <div class="op-error" role="alert">{opError}</div>
   {/if}
 
   <div
     class="file-list"
     bind:this={listElement}
     ondragover={(e) => { if (dragSource) e.preventDefault(); }}
-    ondrop={async (e) => {
+    ondrop={(e) => {
       e.preventDefault();
-      if (dragSource) {
-        const fileName = dragSource.split("/").pop();
-        if (fileName && fileName !== dragSource) {
-          await renameCurrentFile(dragSource, fileName);
-        }
-      }
-      dragSource = null;
-      dragTarget = null;
+      handleDrop("");
     }}
   >
     {#each flatItems as item, i}
@@ -318,30 +436,29 @@
           e.preventDefault();
           contextMenu = { x: e.clientX, y: e.clientY, node: item.node };
         }}
-        draggable={!item.node.is_dir}
+        draggable="true"
         ondragstart={(e) => {
           e.dataTransfer?.setData("text/plain", item.node.path);
           dragSource = item.node.path;
         }}
         ondragend={() => { dragSource = null; dragTarget = null; }}
         ondragover={(e) => {
-          if (dragSource && item.node.is_dir && item.node.path !== dragSource) {
-            e.preventDefault();
-            dragTarget = item.node.path;
-          }
+          if (!canDropInto(item.node)) return;
+          e.preventDefault();
+          dragTarget = item.node.path;
         }}
         ondragleave={() => { if (dragTarget === item.node.path) dragTarget = null; }}
-        ondrop={async (e) => {
+        ondrop={(e) => {
+          // 落とせない相手なら何もしない。
+          // 止めないと .file-list の drop に流れてルートへ移動してしまう
           e.preventDefault();
-          if (dragSource && item.node.is_dir) {
-            const fileName = dragSource.split("/").pop();
-            const newPath = `${item.node.path}/${fileName}`;
-            if (newPath !== dragSource) {
-              await renameCurrentFile(dragSource, newPath);
-            }
+          e.stopPropagation();
+          if (canDropInto(item.node)) {
+            handleDrop(item.node.path);
+          } else {
+            dragSource = null;
+            dragTarget = null;
           }
-          dragSource = null;
-          dragTarget = null;
         }}
         style="padding-left: {item.depth * 14 + 8}px"
       >
@@ -376,12 +493,13 @@
 
   {#if focused}
     <div class="nav-footer">
-      <kbd>j/k</kbd> 移動 <kbd>h/l</kbd> 開閉 <kbd>Enter</kbd> 開く <kbd>o</kbd> 新規 <kbd>右クリック</kbd> メニュー <kbd>Esc</kbd> 戻る
+      <kbd>j/k</kbd> 移動 <kbd>h/l</kbd> 開閉 <kbd>Enter</kbd> 開く <kbd>o</kbd> 新規 <kbd>a</kbd> フォルダ <kbd>r</kbd> 改名 <kbd>x</kbd> 削除 <kbd>ドラッグ</kbd> 移動 <kbd>Esc</kbd> 戻る
     </div>
   {/if}
 </div>
 
 {#if contextMenu}
+  {@const node = contextMenu.node}
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div class="context-overlay" onclick={closeContextMenu} oncontextmenu={(e) => { e.preventDefault(); closeContextMenu(); }}>
     <div
@@ -390,12 +508,29 @@
       onclick={(e) => e.stopPropagation()}
     >
       {#if contextMenu.confirming}
-        <div class="confirm-msg">「{contextMenu.node.name}」を削除？</div>
+        <div class="confirm-msg">
+          {#if node.is_dir}
+            「{node.name}」を中のファイル {countFiles(node)} 件ごと削除？
+          {:else}
+            「{node.name}」を削除？
+          {/if}
+        </div>
         <div class="confirm-actions">
-          <button class="danger" onclick={() => handleDeleteFile(contextMenu!.node.path)}>削除</button>
+          <button class="danger" onclick={() => handleDeleteEntry(node.path)}>削除</button>
           <button onclick={closeContextMenu}>キャンセル</button>
         </div>
       {:else}
+        {#if node.is_dir}
+          <button onclick={() => startTreeInput({ kind: "file", dir: node.path })}>
+            ここに新規ファイル
+          </button>
+          <button onclick={() => startTreeInput({ kind: "folder", dir: node.path })}>
+            ここに新規フォルダ
+          </button>
+        {/if}
+        <button onclick={() => startTreeInput({ kind: "rename", target: node })}>
+          名前を変更
+        </button>
         <button
           class="danger"
           onclick={() => { contextMenu = { ...contextMenu!, confirming: true }; }}
@@ -455,8 +590,31 @@
   }
 
   .input-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
     padding: 4px 8px;
     border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  .input-hint {
+    flex-shrink: 0;
+    max-width: 40%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text-muted);
+    font-size: 10px;
+    font-family: var(--font-mono);
+  }
+
+  .op-error {
+    padding: 4px 8px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-tertiary);
+    color: #f38ba8;
+    font-size: 10px;
     flex-shrink: 0;
   }
 
