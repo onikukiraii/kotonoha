@@ -1,6 +1,8 @@
 <script lang="ts">
   import { getGitState } from "../stores/git.svelte";
   import { getEditorState } from "../stores/editor.svelte";
+  import { getVaultState } from "../stores/vault.svelte";
+  import { copyAbsolutePath } from "../copyPath";
 
   interface Props {
     vaultPath: string;
@@ -9,6 +11,7 @@
   let { vaultPath }: Props = $props();
   const git = getGitState();
   const editor = getEditorState();
+  const vault = getVaultState();
 </script>
 
 <footer class="statusbar">
@@ -21,9 +24,20 @@
         {/if}
       </span>
     {/if}
+    {#if vault.currentFile}
+      {@const path = vault.currentFile}
+      <button
+        class="path"
+        onclick={() => copyAbsolutePath(path)}
+        title="クリックで絶対パスをコピー (⌘⇧C)"
+      >
+        {path}
+      </button>
+    {/if}
   </div>
   <div class="right">
     <span class="hint">⌘O 検索</span>
+    <span class="hint">⌘⇧C パス</span>
     <span class="hint">⌘D Today</span>
     <span class="hint">⌘B バックリンク</span>
     <span class="hint">⌘G Git</span>
@@ -48,6 +62,28 @@
     display: flex;
     align-items: center;
     gap: 12px;
+    min-width: 0;
+  }
+
+  .right {
+    flex-shrink: 0;
+  }
+
+  .path {
+    background: none;
+    border: none;
+    padding: 0;
+    color: inherit;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    cursor: pointer;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .path:hover {
+    color: var(--text-primary);
   }
 
   .git-info {

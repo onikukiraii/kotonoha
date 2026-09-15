@@ -3,6 +3,7 @@
   import { tick, untrack } from "svelte";
   import { moveDestination } from "@kotonoha/ui/tree-move";
   import { createFolder, createNewFile, deleteEntry, moveEntry } from "../stores/vault.svelte";
+  import { copyAbsolutePath } from "../copyPath";
 
   interface Props {
     files: FileNode[];
@@ -530,6 +531,9 @@
             ここに新規フォルダ
           </button>
         {/if}
+        <button onclick={() => { closeContextMenu(); copyAbsolutePath(node.path); }}>
+          パスをコピー
+        </button>
         <button onclick={() => startTreeInput({ kind: "rename", target: node })}>
           名前を変更
         </button>

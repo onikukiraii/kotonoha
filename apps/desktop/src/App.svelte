@@ -44,6 +44,7 @@
     activateNextTab,
     activatePrevTab,
   } from "./lib/stores/tabs.svelte";
+  import { copyAbsolutePath } from "./lib/copyPath";
   import { startGitPolling, stopGitPolling } from "./lib/stores/git.svelte";
   import { startWatcher, stopWatcher } from "./lib/stores/watcher.svelte";
   import { showToast } from "./lib/stores/toast.svelte";
@@ -286,6 +287,9 @@
     } else if (meta && e.key === "r") {
       e.preventDefault();
       reloadVault().then(() => showToast("再読込しました"));
+    } else if (meta && e.shiftKey && e.key === "C") {
+      e.preventDefault();
+      if (vault.currentFile) copyAbsolutePath(vault.currentFile);
     }
   }
 </script>
