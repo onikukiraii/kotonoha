@@ -272,6 +272,8 @@
 
   function handleKeydown(e: KeyboardEvent) {
     if (!focused || treeInput) return;
+    // 修飾キー付きはアプリ全体のショートカット。⌘O をツリーの o（新規ファイル）で横取りしない
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
 
     const item = flatItems[cursorIndex];
 
