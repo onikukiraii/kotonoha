@@ -531,7 +531,7 @@
             ここに新規フォルダ
           </button>
         {/if}
-        <button onclick={() => { closeContextMenu(); copyAbsolutePath(node.path); }}>
+        <button onclick={() => { copyAbsolutePath(node.path); closeContextMenu(); }}>
           パスをコピー
         </button>
         <button onclick={() => startTreeInput({ kind: "rename", target: node })}>
